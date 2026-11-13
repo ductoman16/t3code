@@ -2870,7 +2870,20 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         focusEditorAfterReplace: false,
       });
     }),
-    submit: useStableCallback(() => submitComposer() === true),
+    // On a call, a second remark changes what the agent is doing, so spoken follow-ups steer the
+    // running turn rather than wait behind it, whatever the typed follow-up setting is.
+    submit: useStableCallback(
+      () =>
+        submitComposer(
+          undefined,
+          resolveComposerDispatchMode({
+            running: phase === "running",
+            alternateModifier: false,
+            activeTurnDefault: "steer",
+            canSteer: !isCompacting,
+          }),
+        ) === true,
+    ),
     isTurnRunning: useStableCallback(() => phase === "running"),
     interrupt: handleInterruptPrimaryActionStable,
   });
