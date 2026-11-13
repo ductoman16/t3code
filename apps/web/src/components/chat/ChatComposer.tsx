@@ -135,6 +135,8 @@ import { attachmentUploadBlockReason } from "../../lib/attachmentUploadState";
 import { useDictationShortcut } from "../../speech/useDictationShortcut";
 import { useDictationSubmissionShortcut } from "../../speech/useDictationSubmissionShortcut";
 import { useEnvironmentSpeechInput } from "../../speech/useEnvironmentSpeechInput";
+import { sendWithVoiceModeNote, useVoiceModeComposer } from "../../voiceMode/voiceMode";
+import { VoiceModeToggle } from "../../voiceMode/VoiceModeToggle";
 import { ComposerSpeechButton, ComposerSpeechRecordingPill } from "./ComposerSpeechButton";
 import type { AssistantCitationSourceAnchor } from "~/lib/assistantTextSelection";
 import { shortcutLabelForCommand } from "../../keybindings";
@@ -2088,7 +2090,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const submitComposerRef = useRef<
     (dispatchMode?: ComposerDispatchMode, submissionIntent?: ComposerSubmissionIntent) => void
   >(() => {});
-  const submitComposer = (
+  const submitWithoutVoiceModeNote = (
     event?: { preventDefault: () => void },
     dispatchMode?: ComposerDispatchMode,
     submissionIntent?: ComposerSubmissionIntent,
@@ -2154,6 +2156,28 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
       blurMobileComposerAfterSend();
     }
     return true;
+  };
+  const submitComposer = (
+    event?: { preventDefault: () => void },
+    dispatchMode?: ComposerDispatchMode,
+    submissionIntent?: ComposerSubmissionIntent,
+  ) => {
+    const submit = () => submitWithoutVoiceModeNote(event, dispatchMode, submissionIntent);
+    // Dictation still landing, or an answer to the agent's question: not a message to add a note to.
+    if (voiceInputActive || activePendingProgress) return submit();
+    return sendWithVoiceModeNote(
+      {
+        thread: routeThreadRef,
+        read: () => promptRef.current,
+        // The send reads the prompt in this same tick, before the editor has re-rendered.
+        replace: (text) =>
+          applyPromptReplacement(0, promptRef.current.length, text, {
+            expectedText: promptRef.current,
+            focusEditorAfterReplace: false,
+          }),
+      },
+      submit,
+    );
   };
   const submitComposerStable = useStableCallback(submitComposer);
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- publishes the committed submission handler to the asynchronous dictation completion
@@ -2832,6 +2856,23 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
     void onInterrupt();
   };
   const handleInterruptPrimaryActionStable = useStableCallback(handleInterruptPrimaryAction);
+  useVoiceModeComposer({
+    draftKey: composerDraftTargetKey,
+    thread: routeKind === "server" ? routeThreadRef : null,
+    enabled: !backgroundThread,
+    readDraft: useStableCallback(() => readComposerSnapshot().value),
+    commitDraft: useStableCallback((text: string) => {
+      if (dictationDisabled) return false;
+      const current = readComposerSnapshot().value;
+      return applyPromptReplacement(0, current.length, text, {
+        expectedText: current,
+        focusEditorAfterReplace: false,
+      });
+    }),
+    submit: useStableCallback(() => submitComposer() === true),
+    isTurnRunning: useStableCallback(() => phase === "running"),
+    interrupt: handleInterruptPrimaryActionStable,
+  });
   const scheduleComposerCollapseCheck = () => {
     if (!isMobileViewport || mobileComposerExpandInFlightRef.current) {
       return;
@@ -3645,6 +3686,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
                         />
                       </>
                     ) : null}
+                    {backgroundThread ? null : <VoiceModeToggle disabled={dictationDisabled} />}
                     <VoiceInputSetup
                       environmentId={speechInput.transcriptionEnvironmentId}
                       open={speechInput.setup.open}

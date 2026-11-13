@@ -21,6 +21,7 @@ import {
 import { loadRepoEnv } from "../../scripts/lib/public-config";
 import { thirdPartyLicensesPlugin } from "../../scripts/lib/third-party-licenses";
 import { tailwindPlugins } from "./vite/tailwind";
+import { voiceModeAssetsPlugin } from "./vite/voiceModeAssets";
 import { warmBundledDevPlugin } from "./vite/warmBundledDev";
 
 const repoEnv = loadRepoEnv();
@@ -283,6 +284,7 @@ export default defineConfig(() => {
       react({ compiler: true }),
       tailwindPlugins(bundledDev),
       warmBundledDevPlugin(),
+      voiceModeAssetsPlugin(),
     ],
     optimizeDeps: {
       include: [
@@ -292,8 +294,11 @@ export default defineConfig(() => {
         "@pierre/diffs/edit",
         "@pierre/diffs/react",
         "@pierre/diffs/worker/worker.js",
+        // Loaded when voice mode first starts; found late, they reload the page and turn it off.
+        "@ricky0123/vad-web",
         "effect/Array",
         "effect/Order",
+        "kokoro-js",
         "react-dom/client",
       ],
     },

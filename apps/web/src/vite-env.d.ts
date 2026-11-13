@@ -17,6 +17,9 @@ interface ImportMetaEnv {
   readonly T3CODE_DESKTOP_UPDATE_REPOSITORY: string;
   readonly T3CODE_FEATURE_SECRETS: string;
   readonly APP_VERSION: string;
+  /** Where the voice mode speech detector and synthesizer runtimes are served, relative to BASE_URL. */
+  readonly VITE_VOICE_MODE_DETECTOR_ASSETS: string;
+  readonly VITE_VOICE_MODE_SYNTHESIZER_ASSETS: string;
 }
 
 interface ImportMeta {

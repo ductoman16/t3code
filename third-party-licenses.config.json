@@ -226,6 +226,21 @@
           ]
         }
       ]
+    },
+    {
+      "bundles": ["desktop", "web"],
+      "license": "MIT",
+      "name": "Silero VAD speech detection model",
+      "sourceUrl": "https://github.com/snakers4/silero-vad",
+      "generatedNotices": [
+        {
+          "licenseId": "MIT",
+          "copyrights": ["Copyright (c) 2020-present Silero Team"],
+          "preamble": [
+            "The bundled silero_vad_v5.onnx is the unmodified Silero VAD v5 model, which voice mode uses to tell when you are speaking."
+          ]
+        }
+      ]
     }
   ],
   "packageOverrides": [
@@ -841,6 +856,28 @@
       "name": "iobuffer",
       "license": "MIT",
       "sourceUrl": "https://github.com/image-js/iobuffer"
+    },
+    {
+      "name": "@ricky0123/vad-web",
+      "license": "ISC",
+      "sourceUrl": "https://github.com/ricky0123/vad",
+      "generatedNotice": {
+        "licenseId": "ISC",
+        "copyrights": ["Copyright (c) 2022-present ricky0123"]
+      }
+    },
+    {
+      "repositoryUrl": "https://github.com/microsoft/onnxruntime",
+      "generatedNotice": {
+        "licenseId": "MIT",
+        "copyrights": ["Copyright (c) Microsoft Corporation"]
+      }
+    },
+    {
+      "name": "guid-typescript",
+      "generatedNotice": {
+        "licenseId": "ISC"
+      }
     }
   ]
 }
