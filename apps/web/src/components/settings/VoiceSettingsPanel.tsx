@@ -121,6 +121,11 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { MicrophoneOrderList } from "./MicrophoneOrderList";
 import { MicrophoneTest } from "./MicrophoneTest";
+import {
+  updateVoiceModeSettings,
+  useVoiceModeSettings,
+  VOICE_MODE_SPEEDS,
+} from "../../voiceMode/voiceModeSettings";
 import { CloudVoiceConfiguration } from "./CloudVoiceConfiguration";
 import { ModelBenchmarks, orderSpeechLanguages } from "./SpeechModelComparison";
 import { languageLabel, SpeechLanguageSelect } from "./SpeechLanguageSelect";
@@ -1223,6 +1228,7 @@ export function VoiceSettingsPanel() {
   } | null>(null);
   const { environments } = useEnvironments();
   const [microphones, setMicrophones] = useState<BrowserMicrophone[]>([]);
+  const voiceModeSettings = useVoiceModeSettings();
   const prepared = destination.cloudProvider ? null : destination.prepared;
   const catalog = useVoiceModels(prepared);
 
@@ -1367,6 +1373,33 @@ export function VoiceSettingsPanel() {
                         {SHORTCUT_MODES[mode].hint}
                       </span>
                     </span>
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          }
+        />
+      </SettingsSection>
+
+      <SettingsSection id="voice-mode" title="Voice mode">
+        <SettingsRow
+          {...searchableSetting("voice-mode-speed")}
+          title="Reading speed"
+          description="How fast replies are read aloud."
+          control={
+            <Select
+              value={String(voiceModeSettings.speed)}
+              onValueChange={(value) => {
+                if (value) updateVoiceModeSettings({ speed: Number(value) });
+              }}
+            >
+              <SelectTrigger size="sm" aria-label="Reading speed" className="max-w-32">
+                <SelectValue>{`${voiceModeSettings.speed}×`}</SelectValue>
+              </SelectTrigger>
+              <SelectPopup align="end" alignItemWithTrigger={false}>
+                {VOICE_MODE_SPEEDS.map((speed) => (
+                  <SelectItem key={speed} value={String(speed)}>
+                    {`${speed}×`}
                   </SelectItem>
                 ))}
               </SelectPopup>
