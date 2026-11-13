@@ -1,8 +1,7 @@
 /**
- * Voice mode: a spoken conversation with the thread's own agent. Speech is transcribed into the
- * composer draft and sent after a pause, so it reaches the thread's model exactly as typed text
- * would; the reply is read aloud as it streams, and talking over it cuts it off. A thread's model
- * is told when voice mode comes on, and when it has gone off, by a note on the user's next message.
+ * Voice mode: a spoken conversation with the thread's own agent, through the composer draft. Replies
+ * are read aloud as they stream; talking over one cuts it off. It stays with the thread it was turned
+ * on in, and the thread's model is told by a note when voice mode comes on and when it goes off.
  */
 import * as Schema from "effect/Schema";
 
@@ -90,6 +89,8 @@ export interface ReplyHandlers {
 export interface VoiceModeTarget {
   /** Identifies the draft; speech meant for one draft is never written or sent under another. */
   readonly key: string;
+  /** Identifies the thread; a draft already has the id its thread gets from its first message. */
+  readonly thread: string;
   readDraft(): string;
   /** Replaces the whole draft. Returns false when the composer refused the edit. */
   commitDraft(text: string): boolean;
@@ -185,6 +186,8 @@ export class VoiceModeController {
   private targets: VoiceModeTarget[] = [];
   /** The key of the composer whose thread the conversation is with. */
   private conversation: string | null = null;
+  /** The thread voice mode was turned on in; it turns off when the user opens another. */
+  private conversationThread: string | null = null;
   private stopWatchingReplies: (() => void) | null = null;
 
   private soundStarted = false;
@@ -228,6 +231,7 @@ export class VoiceModeController {
     const run = ++this.run;
     const abort = new AbortController();
     this.abort = abort;
+    this.conversationThread = this.target?.thread ?? null;
     this.setState({ ...OFF, power: "starting" });
     try {
       // A microphone still closing from the last run must be released before it is opened again.
@@ -313,6 +317,14 @@ export class VoiceModeController {
     // A composer that went away or was only re-registered leaves the conversation where it is,
     // so a reply keeps being read while the user looks at settings or the composer re-renders.
     if (!target || target.key === this.conversation) return;
+    if (this.current.power !== "off") {
+      // Another thread's replies were written to be read, not heard, so voice mode stays behind.
+      if (this.conversationThread !== null && target.thread !== this.conversationThread) {
+        this.turnOff();
+      } else {
+        this.conversationThread = target.thread;
+      }
+    }
     this.conversation = target.key;
     this.cancelSend();
     this.spokenDraft = null;
@@ -490,6 +502,7 @@ export class VoiceModeController {
     this.stopWatchingReplies?.();
     this.stopWatchingReplies = null;
     this.conversation = null;
+    this.conversationThread = null;
     this.stopListeningToSpeaker?.();
     this.stopListeningToSpeaker = null;
     this.soundStarted = false;

@@ -2858,6 +2858,7 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
   const handleInterruptPrimaryActionStable = useStableCallback(handleInterruptPrimaryAction);
   useVoiceModeComposer({
     draftKey: composerDraftTargetKey,
+    threadRef: routeThreadRef,
     thread: routeKind === "server" ? routeThreadRef : null,
     enabled: !backgroundThread,
     readDraft: useStableCallback(() => readComposerSnapshot().value),

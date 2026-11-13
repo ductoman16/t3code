@@ -212,7 +212,7 @@ function setUp() {
     settings: () => ({ sendAfterSilenceMs: SEND_AFTER_SILENCE_MS }),
   });
   const composer = new StubComposer("thread-1", controller);
-  controller.registerTarget(composer);
+  const leaveComposer = controller.registerTarget(composer);
 
   /** The user says one phrase and transcription returns `transcript` for it. */
   const say = async (transcript: string) => {
@@ -222,7 +222,7 @@ function setUp() {
     await transcriber.answer(transcript);
   };
 
-  return { microphone, transcriber, speaker, clock, composer, controller, say };
+  return { microphone, transcriber, speaker, clock, composer, leaveComposer, controller, say };
 }
 
 async function setUpOn() {
@@ -506,6 +506,64 @@ describe("VoiceModeController", () => {
     });
   });
 
+  describe("staying with its thread", () => {
+    it("turns itself off when the user opens another thread", async () => {
+      const { controller, microphone, speaker, composer } = await setUpOn();
+      composer.reply("message-1", "I found the bug.");
+
+      controller.registerTarget(new StubComposer("thread-2", controller));
+      await settle();
+
+      expect(controller.state).toMatchObject({ power: "off", error: null });
+      expect(microphone.open).toBe(false);
+      expect(speaker.running).toBe(false);
+    });
+
+    it("turns itself off when the user opens another thread while it is starting", async () => {
+      const { controller, microphone } = setUp();
+      const starting = controller.turnOn();
+
+      controller.registerTarget(new StubComposer("thread-2", controller));
+      await starting;
+      await settle();
+
+      expect(controller.state.power).toBe("off");
+      expect(microphone.open).toBe(false);
+    });
+
+    it("stays on when a new draft's first message turns it into its thread", async () => {
+      const { controller, leaveComposer, clock, speaker, say } = setUp();
+      // A new thread's draft is the only composer on screen.
+      leaveComposer();
+      const draft = new StubComposer("draft-1", controller, "thread-9");
+      const leaveDraft = controller.registerTarget(draft);
+      await controller.turnOn();
+      await say("start a changelog");
+      clock.advance(SEND_AFTER_SILENCE_MS);
+
+      leaveDraft();
+      const created = new StubComposer("thread-9", controller);
+      created.replyInProgress = { messageId: "message-1", sentence: "Started it." };
+      controller.registerTarget(created);
+
+      expect(controller.state.power).toBe("on");
+      expect(speaker.said).toEqual(["Started it."]);
+    });
+
+    it("can be turned on again in the thread the user moved to", async () => {
+      const { controller, clock } = await setUpOn();
+      const other = new StubComposer("thread-2", controller);
+      controller.registerTarget(other);
+
+      await controller.turnOn();
+      other.type("list the branches");
+
+      expect(controller.state.power).toBe("on");
+      expect(other.sent).toEqual([withVoiceModeInstructions("list the branches")]);
+      clock.advance(SEND_AFTER_SILENCE_MS);
+    });
+  });
+
   describe("telling the agent about voice mode", () => {
     it("says so with the first spoken message and not with the next", async () => {
       const { composer, clock, say } = await setUpOn();
@@ -526,27 +584,27 @@ describe("VoiceModeController", () => {
       expect(composer.sent).toEqual([withVoiceModeInstructions("run the tests")]);
     });
 
-    it("tells each thread once", async () => {
+    it("tells a thread it left voice mode when the user moved to another thread", async () => {
       const { controller, composer, clock, say } = await setUpOn();
       await say("run the tests");
       clock.advance(SEND_AFTER_SILENCE_MS);
 
-      const other = new StubComposer("thread-2", controller);
-      const leaveOther = controller.registerTarget(other);
-      await say("list the branches");
-      clock.advance(SEND_AFTER_SILENCE_MS);
+      const leaveOther = controller.registerTarget(new StubComposer("thread-2", controller));
       leaveOther();
-      await say("run them again");
-      clock.advance(SEND_AFTER_SILENCE_MS);
+      composer.type("now fix the parser");
 
-      expect(other.sent).toEqual([withVoiceModeInstructions("list the branches")]);
-      expect(composer.sent).toEqual([withVoiceModeInstructions("run the tests"), "run them again"]);
+      expect(composer.sent).toEqual([
+        withVoiceModeInstructions("run the tests"),
+        withVoiceModeEnded("now fix the parser"),
+      ]);
     });
 
     it("does not repeat it when the first message turns a draft into a thread", async () => {
-      const { controller, clock, say } = await setUpOn();
+      const { controller, leaveComposer, clock, say } = setUp();
+      leaveComposer();
       const draft = new StubComposer("draft-1", controller, "thread-9");
       const leaveDraft = controller.registerTarget(draft);
+      await controller.turnOn();
       await say("start a changelog");
       clock.advance(SEND_AFTER_SILENCE_MS);
 
@@ -740,15 +798,6 @@ describe("VoiceModeController", () => {
       expect(speaker.said).toEqual(["I found the bug.", "The config looks fine."]);
     });
 
-    it("stops reading when the user leaves the thread", async () => {
-      const { controller, composer, speaker } = await setUpOn();
-      composer.reply("message-1", "I found the bug.");
-
-      controller.registerTarget(new StubComposer("thread-2", controller));
-
-      expect(speaker.isActive()).toBe(false);
-    });
-
     it("keeps reading while the composer is away or re-rendered for the same thread", async () => {
       const { controller, composer, speaker } = await setUpOn();
       const leave = controller.registerTarget(new StubComposer("thread-1", controller));
@@ -772,24 +821,13 @@ describe("VoiceModeController", () => {
       expect(rerendered.sent).toEqual([withVoiceModeInstructions("run the tests")]);
     });
 
-    it("reads a reply already streaming in a thread only when voice mode sent the message", async () => {
-      const { controller, clock, speaker, say } = await setUpOn();
+    it("does not read a reply already streaming when voice mode comes on", async () => {
+      const { controller, composer, speaker } = setUp();
+      composer.replyInProgress = { messageId: "message-9", sentence: "Unrelated work." };
 
-      // Opening a thread where an agent happens to be mid-reply.
-      const busy = new StubComposer("thread-2", controller);
-      busy.replyInProgress = { messageId: "message-9", sentence: "Unrelated work." };
-      const leaveBusy = controller.registerTarget(busy);
+      await controller.turnOn();
+
       expect(speaker.said).toEqual([]);
-      leaveBusy();
-
-      // A new thread's composer is replaced once the first message creates the thread.
-      await say("run the tests");
-      clock.advance(SEND_AFTER_SILENCE_MS);
-      const created = new StubComposer("thread-3", controller);
-      created.replyInProgress = { messageId: "message-1", sentence: "Running them now." };
-      controller.registerTarget(created);
-
-      expect(speaker.said).toEqual(["Running them now."]);
     });
   });
 

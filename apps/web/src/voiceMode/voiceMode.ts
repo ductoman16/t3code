@@ -99,6 +99,8 @@ function watchThreadReplies(
  */
 export function useVoiceModeComposer(input: {
   readonly draftKey: string;
+  /** The thread this composer writes to; a draft already has the id its thread will get. */
+  readonly threadRef: ScopedThreadRef;
   /** Null until the draft's first message has created its thread. */
   readonly thread: ScopedThreadRef | null;
   readonly enabled: boolean;
@@ -109,6 +111,7 @@ export function useVoiceModeComposer(input: {
   readonly interrupt: () => void;
 }): void {
   const { draftKey, enabled, readDraft, commitDraft, submit, isTurnRunning, interrupt } = input;
+  const conversationThread = scopedThreadKey(input.threadRef);
   // The ref is a new object on every render; its two ids are what identify the thread.
   const environmentId = input.thread?.environmentId ?? null;
   const threadId = input.thread?.threadId ?? null;
@@ -119,6 +122,7 @@ export function useVoiceModeComposer(input: {
     return voiceMode.registerTarget({
       // A draft becomes a different conversation once its thread exists and replies can arrive.
       key: thread ? `${draftKey}@${scopedThreadKey(thread)}` : draftKey,
+      thread: conversationThread,
       readDraft,
       commitDraft,
       submit,
@@ -129,6 +133,7 @@ export function useVoiceModeComposer(input: {
     });
   }, [
     draftKey,
+    conversationThread,
     environmentId,
     threadId,
     enabled,
