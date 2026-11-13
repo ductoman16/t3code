@@ -30,8 +30,9 @@ fail() {
   exit 1
 }
 
+# pgrep cannot match this app's process name, so ask Launch Services by bundle id.
 app_running() {
-  pgrep -x "$APP_NAME" >/dev/null 2>&1
+  [ "$(osascript -e 'application id "com.ductoman16.t3code-voice" is running')" = "true" ]
 }
 
 install_staged() {
