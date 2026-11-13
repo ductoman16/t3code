@@ -592,6 +592,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     searchTerms: [msg("speech voice keyboard hotkey hold toggle auto")],
   },
   {
+    id: "voice-mode-speed",
+    title: msg("Reading speed"),
+    to: "/settings/voice",
+    searchTerms: [msg("voice mode speech rate pace fast slow read aloud tts kokoro")],
+  },
+  {
     id: "speech-language",
     title: msg("Transcription language"),
     to: "/settings/voice",
