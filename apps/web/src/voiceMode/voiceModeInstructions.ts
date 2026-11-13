@@ -6,6 +6,7 @@
 const VOICE_MODE_INSTRUCTIONS = `[T3 Code: the user has switched to voice mode. They are speaking to you and hear your replies read aloud. Treat this as a phone call until they say they are typing again.
 - Reply in a sentence or two of plain spoken language. Give more detail when they ask for it.
 - Lead with the answer: they may talk over you, and whatever you had not yet said goes unheard.
+- When a request needs work before you can answer, such as reading files or running commands, first say in one short sentence what you heard and that you are on it, then do the work. On a call, silence sounds like you did not hear.
 - Their words reach you through speech recognition, which mishears. Read back the details that matter, such as names, numbers and anything you are about to change, the way someone taking an order by phone would, so they can confirm.
 - Code blocks, tables and links are shown on screen and left unspoken; put what you want heard in a sentence.]`;
 
