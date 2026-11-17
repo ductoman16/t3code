@@ -7,7 +7,8 @@ import {
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 import { getRecordingPermissionsAsync } from "expo-audio";
-import { AppState } from "react-native";
+import * as Notifications from "expo-notifications";
+import { AppRegistry, AppState } from "react-native";
 
 import * as Dialog from "../../components/ui/Dialog";
 import { scopedThreadKey } from "../../lib/scopedEntities";
@@ -21,6 +22,7 @@ import { createAndroidSpeaker } from "./androidSpeaker";
 import { createAndroidSpeechSource } from "./androidSpeechSource";
 import { nativeVoiceMode } from "./nativeVoiceMode";
 import { createRouteTranscriber } from "./routeTranscriber";
+import { createVoiceModeCall } from "./voiceModeCall";
 
 const READING_SPEED = 1.1;
 const SEND_AFTER_SILENCE_MS = 900;
@@ -70,10 +72,18 @@ function createVoiceMode() {
     if (error && error !== reported) Dialog.alert("Voice mode stopped", error);
     reported = error;
   });
-  // The microphone is only allowed while the app is on screen.
-  AppState.addEventListener("change", (state) => {
-    if (state === "background" && !askingForMicrophone) controller.turnOff();
+  const call = createVoiceModeCall({
+    native,
+    controller,
+    askingForMicrophone: () => askingForMicrophone,
+    askForNotifications: async () => {
+      const current = await Notifications.getPermissionsAsync();
+      if (!current.granted && current.canAskAgain) await Notifications.requestPermissionsAsync();
+    },
   });
+  AppState.addEventListener("change", call.appStateChanged);
+  // Keeps JavaScript timers running with the screen off; the native module ends it with the call.
+  AppRegistry.registerHeadlessTask("T3VoiceMode", () => () => new Promise<void>(() => {}));
   return controller;
 }
 
