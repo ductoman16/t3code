@@ -16,6 +16,8 @@ import java.util.UUID
  */
 internal class VoiceModeMicrophone(
   private val directory: File,
+  /** The Silero VAD model file. */
+  private val speechModel: () -> ByteArray,
   /** Whether the agent's voice is playing, checked on every frame. */
   private val talkingOver: () -> Boolean,
   private val onEvent: (Map<String, Any?>) -> Unit
@@ -23,11 +25,13 @@ internal class VoiceModeMicrophone(
   private var record: AudioRecord? = null
   private var effects: List<android.media.audiofx.AudioEffect> = emptyList()
   private var thread: Thread? = null
+  private var vad: SileroVad? = null
   @Volatile private var running = false
 
   @SuppressLint("MissingPermission") // The app asks for the microphone before it starts voice mode.
   fun start() {
     check(record == null) { "Voice mode is already listening." }
+    val model = SileroVad(speechModel()).also { vad = it }
     val minimum = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL, ENCODING)
     check(minimum > 0) { "This phone cannot record at 16 kHz." }
     val audio = AudioRecord(
@@ -49,7 +53,7 @@ internal class VoiceModeMicrophone(
     audio.startRecording()
     record = audio
     running = true
-    thread = Thread({ listen(audio) }, "T3VoiceModeMicrophone").also { it.start() }
+    thread = Thread({ listen(audio, model) }, "T3VoiceModeMicrophone").also { it.start() }
   }
 
   fun stop() {
@@ -63,10 +67,12 @@ internal class VoiceModeMicrophone(
     record = null
     effects.forEach { it.release() }
     effects = emptyList()
+    vad?.close()
+    vad = null
   }
 
-  private fun listen(audio: AudioRecord) {
-    val detector = SpeechDetector()
+  private fun listen(audio: AudioRecord, model: SpeechModel) {
+    val detector = SpeechDetector(model)
     val frame = ShortArray(FRAME_SAMPLES)
     try {
       while (running) {
@@ -101,7 +107,7 @@ internal class VoiceModeMicrophone(
 
   companion object {
     const val SAMPLE_RATE = 16000
-    private const val FRAME_SAMPLES = 320
+    private const val FRAME_SAMPLES = SileroVad.FRAME_SAMPLES
     private const val CHANNEL = AudioFormat.CHANNEL_IN_MONO
     private const val ENCODING = AudioFormat.ENCODING_PCM_16BIT
 

@@ -4,6 +4,8 @@ apply plugin: 'org.jetbrains.kotlin.android'
 group = 'com.t3tools.voicemode'
 version = '0.0.0'
 
+def onnxRuntimeVersion = '1.31.1'
+
 android {
   namespace 'expo.modules.t3voicemode'
   compileSdk rootProject.ext.compileSdkVersion
@@ -14,8 +16,17 @@ android {
   }
 }
 
+// Unit tests run the model on the JVM build of the same runtime; the Android one only loads on a phone.
+configurations.configureEach {
+  if (name.endsWith('UnitTestRuntimeClasspath')) {
+    exclude group: 'com.microsoft.onnxruntime', module: 'onnxruntime-android'
+  }
+}
+
 dependencies {
   implementation project(':expo-modules-core')
   implementation 'com.facebook.react:react-android'
+  implementation "com.microsoft.onnxruntime:onnxruntime-android:$onnxRuntimeVersion"
   testImplementation 'junit:junit:4.13.2'
+  testRuntimeOnly "com.microsoft.onnxruntime:onnxruntime:$onnxRuntimeVersion"
 }

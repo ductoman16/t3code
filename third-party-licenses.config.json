@@ -228,7 +228,7 @@
       ]
     },
     {
-      "bundles": ["desktop", "web"],
+      "bundles": ["android", "desktop", "mobile", "web"],
       "license": "MIT",
       "name": "Silero VAD speech detection model",
       "sourceUrl": "https://github.com/snakers4/silero-vad",
@@ -239,6 +239,19 @@
           "preamble": [
             "The bundled silero_vad_v5.onnx is the unmodified Silero VAD v5 model, which voice mode uses to tell when you are speaking."
           ]
+        }
+      ]
+    },
+    {
+      "bundles": ["android", "mobile"],
+      "license": "MIT",
+      "name": "ONNX Runtime",
+      "version": "1.31.1",
+      "sourceUrl": "https://github.com/microsoft/onnxruntime/tree/v1.31.1",
+      "generatedNotices": [
+        {
+          "licenseId": "MIT",
+          "copyrights": ["Copyright (c) Microsoft Corporation"]
         }
       ]
     }
