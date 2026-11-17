@@ -18,6 +18,8 @@ interface Subscription {
 export interface NativeVoiceMode {
   addListener(event: "onSpeech", listener: (event: NativeSpeechEvent) => void): Subscription;
   addListener(event: "onVoice", listener: (event: NativeVoiceEvent) => void): Subscription;
+  /** The Hang up action on voice mode's notification. */
+  addListener(event: "onHangUp", listener: () => void): Subscription;
   startListening(): Promise<void>;
   stopListening(): Promise<void>;
   prepareVoice(): Promise<void>;

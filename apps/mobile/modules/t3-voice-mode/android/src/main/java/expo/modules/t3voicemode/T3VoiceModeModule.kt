@@ -4,6 +4,11 @@ import android.content.Context
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.bridge.UiThreadUtil
+import com.facebook.react.jstasks.HeadlessJsTaskConfig
+import com.facebook.react.jstasks.HeadlessJsTaskContext
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -17,21 +22,23 @@ class T3VoiceModeModule : Module() {
   private var microphone: VoiceModeMicrophone? = null
   @Volatile private var voice: VoiceModeVoice? = null
   private var previousMode: Int? = null
+  /** Read and written on the main thread only. */
+  private var javaScriptTask: Int? = null
 
   private val context: Context get() = requireNotNull(appContext.reactContext)
   private val audioManager get() = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
   override fun definition() = ModuleDefinition {
     Name("T3VoiceMode")
-    Events("onSpeech", "onVoice")
+    Events("onSpeech", "onVoice", "onHangUp")
+
+    OnCreate {
+      VoiceModeService.onHangUp = { sendEvent("onHangUp", emptyMap<String, Any?>()) }
+    }
 
     AsyncFunction("startListening") { startListening() }
 
-    AsyncFunction("stopListening") {
-      microphone?.stop()
-      microphone = null
-      restoreRoute()
-    }
+    AsyncFunction("stopListening") { stopListening() }
 
     AsyncFunction("prepareVoice") Coroutine { ->
       val created = voice ?: VoiceModeVoice(context) { sendEvent("onVoice", it) }
@@ -57,11 +64,10 @@ class T3VoiceModeModule : Module() {
     }
 
     OnDestroy {
-      microphone?.stop()
-      microphone = null
+      VoiceModeService.onHangUp = null
+      stopListening()
       voice?.shutDown()
       voice = null
-      restoreRoute()
     }
   }
 
@@ -74,11 +80,36 @@ class T3VoiceModeModule : Module() {
     ) { sendEvent("onSpeech", it) }
     try {
       started.start()
+      VoiceModeService.start(context)
     } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
+      started.stop()
       restoreRoute()
       throw error
     }
     microphone = started
+    keepJavaScriptRunning()
+  }
+
+  private fun stopListening() {
+    microphone?.stop()
+    microphone = null
+    VoiceModeService.stop(context)
+    UiThreadUtil.runOnUiThread {
+      javaScriptTask?.let { HeadlessJsTaskContext.getInstance(context as ReactContext).finishTask(it) }
+      javaScriptTask = null
+    }
+    restoreRoute()
+  }
+
+  // React Native stops firing JavaScript timers once the app is paused, as it is with the screen
+  // off, unless a headless task is running. This one lasts until listening stops.
+  private fun keepJavaScriptRunning() {
+    UiThreadUtil.runOnUiThread {
+      if (javaScriptTask != null) return@runOnUiThread
+      javaScriptTask = HeadlessJsTaskContext.getInstance(context as ReactContext).startTask(
+        HeadlessJsTaskConfig(JAVASCRIPT_TASK, Arguments.createMap(), 0, true)
+      )
+    }
   }
 
   // Call mode turns on the phone's echo cancellation. It plays through the earpiece by default, so
@@ -113,6 +144,7 @@ class T3VoiceModeModule : Module() {
   }
 
   private companion object {
+    const val JAVASCRIPT_TASK = "T3VoiceMode"
     val HEADSET_TYPES = setOf(
       AudioDeviceInfo.TYPE_WIRED_HEADSET,
       AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
