@@ -21,6 +21,12 @@ export function ThreadHeader(props: {
   readonly hasThreadCwd: boolean;
   readonly inspectorMode: ThreadInspectorMode | null;
   readonly onOpenFilesInspector: () => void;
+  /** Null where voice mode is not available. */
+  readonly voiceMode?: {
+    readonly on: boolean;
+    readonly starting: boolean;
+    readonly onToggle: () => void;
+  } | null;
 }) {
   const goBack = useWorkspaceBackNavigation();
   const { toggleAuxiliaryPane, startNewTask } = useAdaptiveWorkspaceLayout();
@@ -28,7 +34,19 @@ export function ThreadHeader(props: {
   const gitMenu = useThreadGitMenuDefinition(props.gitControls);
   const terminalMenu = threadTerminalMenu(props.gitControls);
   const filesVisible = props.inspectorMode === "files" && panes.auxiliaryPaneVisible;
-  const actions: AppBarAction[] = props.hasThreadCwd
+  const voiceAction: AppBarAction[] = props.voiceMode
+    ? [
+        {
+          accessibilityLabel: props.voiceMode.on ? "Stop voice mode" : "Start voice mode",
+          icon: "mic",
+          selected: props.voiceMode.on,
+          loading: props.voiceMode.starting,
+          separateBackground: false,
+          onPress: props.voiceMode.onToggle,
+        },
+      ]
+    : [];
+  const fileActions: AppBarAction[] = props.hasThreadCwd
     ? [
         {
           accessibilityLabel: filesVisible ? "Close files" : "Open files",
@@ -40,6 +58,7 @@ export function ThreadHeader(props: {
         },
       ]
     : [];
+  const actions = [...voiceAction, ...fileActions];
   const menus = [gitMenu, terminalMenu].filter((menu): menu is AppBarMenu => menu !== null);
 
   return (

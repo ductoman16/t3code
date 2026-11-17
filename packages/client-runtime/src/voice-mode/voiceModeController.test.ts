@@ -569,6 +569,18 @@ describe("VoiceModeController", () => {
   });
 
   describe("telling the agent about voice mode", () => {
+    it("notes a message that a composer sends from text it read, once it has gone", async () => {
+      const { controller } = await setUpOn();
+
+      const first = controller.noteMessage("thread-1", "run the tests");
+      expect(first.text).toBe(withVoiceModeInstructions("run the tests"));
+      expect(controller.noteMessage("thread-1", "again").text).toBe(
+        withVoiceModeInstructions("again"),
+      );
+      first.sent();
+      expect(controller.noteMessage("thread-1", "again").text).toBe("again");
+    });
+
     it("says so with the first spoken message and not with the next", async () => {
       const { composer, clock, say } = await setUpOn();
 

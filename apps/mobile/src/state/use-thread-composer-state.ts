@@ -67,6 +67,7 @@ import {
   selectPendingAcknowledgedMessages,
 } from "../features/threads/pending-thread-feed";
 import { threadAllowsProviderSwitch } from "./thread-provider-switching";
+import { noteVoiceModeMessage } from "../features/voice-mode/voiceMode";
 import { appAtomRegistry } from "./atom-registry";
 import { pendingThreadCreationMessage } from "./pending-thread-creation";
 import {
@@ -806,6 +807,8 @@ export function useThreadComposerState(input: {
       appAtomRegistry.get(fullHistoryThreadKeysAtom)[threadKey] !== true &&
       resumeCompactionTokens(modelSelection, text, metadata.createdAt) !== null;
     const messageId = MessageId.make(metadata.messageId);
+    // Tells the thread's model when voice mode has come on or gone off since it last heard.
+    const voiceModeNote = noteVoiceModeMessage(threadKey, text);
     onWillEnqueue?.();
     clearThreadComposerError(threadKey);
     const enqueuePromise = enqueueThreadOutboxMessage({
@@ -813,7 +816,7 @@ export function useThreadComposerState(input: {
       threadId: selectedThreadShell.id,
       messageId,
       commandId: CommandId.make(metadata.commandId),
-      text,
+      text: voiceModeNote.text,
       attachments,
       context: draft.context,
       modelSelection,
@@ -827,6 +830,7 @@ export function useThreadComposerState(input: {
       ...(freshContext ? { freshContext: true } : {}),
       createdAt: metadata.createdAt,
     });
+    voiceModeNote.sent();
     clearComposerDraftContent(threadKey, { deferAttachmentCleanup: true });
     if (freshContext) setFreshSessionPending(threadKey, false);
     enqueuePromise.then(
