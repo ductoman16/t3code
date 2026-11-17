@@ -13,12 +13,12 @@ import {
 } from "./environmentTranscriber";
 import { createKokoroSpeaker } from "./kokoroSpeaker";
 import { createMicrophoneSpeechSource } from "./microphoneSpeechSource";
-import { createReplyReader } from "./replyReader";
 import {
+  createReplyReader,
   VoiceModeController,
   type VoiceModeState,
   type VoiceModeTarget,
-} from "./voiceModeController";
+} from "@t3tools/client-runtime/voice-mode";
 import { readVoiceModeSettings } from "./voiceModeSettings";
 
 // Resolved by a hook, so the composer publishes it here for the controller to read.

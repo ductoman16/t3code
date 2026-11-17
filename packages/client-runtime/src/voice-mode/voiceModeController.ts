@@ -5,7 +5,7 @@
  */
 import * as Schema from "effect/Schema";
 
-import { withVoiceModeEnded, withVoiceModeInstructions } from "./voiceModeInstructions";
+import { withVoiceModeEnded, withVoiceModeInstructions } from "./voiceModeInstructions.ts";
 
 export type VoiceModeActivity = "listening" | "hearing" | "transcribing" | "sending" | "speaking";
 
@@ -210,7 +210,11 @@ export class VoiceModeController {
   /** Replies the user talked over; the rest of each is not said. */
   private readonly repliesCutOff = new Set<string>();
 
-  constructor(private readonly dependencies: VoiceModeDependencies) {}
+  private readonly dependencies: VoiceModeDependencies;
+
+  constructor(dependencies: VoiceModeDependencies) {
+    this.dependencies = dependencies;
+  }
 
   get state(): VoiceModeState {
     return this.current;

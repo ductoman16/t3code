@@ -15,7 +15,11 @@ import { resolveSpeechVocabulary } from "@t3tools/shared/speech";
 import { getClientSettings } from "../hooks/useSettings";
 import { runEnvironmentSpeech } from "../speech/runEnvironmentSpeech";
 import { bindAudioGrant } from "../speech/voiceConsent";
-import { isVoiceModeError, VoiceModeError, type VoiceModeTranscriber } from "./voiceModeController";
+import {
+  isVoiceModeError,
+  VoiceModeError,
+  type VoiceModeTranscriber,
+} from "@t3tools/client-runtime/voice-mode";
 
 /** Where the person chose, in Settings → Voice, to have their speech transcribed. */
 export interface TranscriptionDestination {

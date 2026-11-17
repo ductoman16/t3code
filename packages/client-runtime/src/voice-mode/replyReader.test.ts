@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { createReplyReader, type TimelineItem } from "./replyReader";
+import { createReplyReader, type TimelineItem } from "./replyReader.ts";
 
 const assistant = (id: string, text: string, streaming = false): TimelineItem => ({
   item: { id, type: "assistant_message", text, streaming },

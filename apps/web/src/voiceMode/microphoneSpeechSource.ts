@@ -2,7 +2,7 @@ import {
   VoiceModeError,
   type SpeechSource,
   type SpeechSourceHandlers,
-} from "./voiceModeController";
+} from "@t3tools/client-runtime/voice-mode";
 
 const DETECTOR_ASSETS = `${import.meta.env.BASE_URL}${import.meta.env.VITE_VOICE_MODE_DETECTOR_ASSETS}`;
 
