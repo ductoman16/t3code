@@ -5,29 +5,10 @@ import kotlin.math.max
 import kotlin.math.sqrt
 
 /**
- * Finds utterances in a stream of 16 kHz mono PCM16 frames by their loudness against the room's
- * background noise, which it keeps learning while nobody is talking.
+ * Finds utterances in a stream of 16 kHz mono PCM16 frames, deciding frame by frame from the
+ * model's speech probability the way the web client's detector (vad-web's frame processor) does.
  */
-internal class SpeechDetector(
-  private val frameMs: Int = 20,
-  private val minSpeechMs: Int = 160,
-  private val redemptionMs: Int = 600,
-  private val preRollMs: Int = 300,
-  private val maxUtteranceMs: Int = 30_000,
-  /** How far above the background a frame must be to start an utterance. */
-  private val onsetDb: Double = 12.0,
-  /** How far above the background a frame must be to keep one going. */
-  private val sustainDb: Double = 7.0,
-  /** Quieter than this is never speech, however quiet the room. */
-  private val floorLimitDb: Double = -58.0,
-  /** Time spent learning the room before listening for speech. */
-  private val warmUpMs: Int = 400,
-  /** How much louder, and how much longer, speech must be while the agent's voice is playing. */
-  private val talkOverExtraDb: Double = 10.0,
-  private val talkOverMinSpeechMs: Int = 400,
-  /** How long that stricter hearing lasts after the voice stops, while its echo dies away. */
-  private val talkOverTailMs: Int = 500
-) {
+internal class SpeechDetector(private val model: SpeechModel) {
   sealed interface Event {
     data object Start : Event
     data object Confirmed : Event
@@ -35,85 +16,96 @@ internal class SpeechDetector(
     class Utterance(val pcm: ShortArray) : Event
   }
 
-  private var background = Double.NaN
-  private var heardMs = 0
-  private val preRoll = ArrayDeque<ShortArray>()
-  private val utterance = ArrayList<ShortArray>()
+  private val frames = ArrayList<ShortArray>()
   private var speaking = false
   private var confirmed = false
-  private var speechMs = 0
-  private var quietMs = 0
-  private var requiredSpeechMs = minSpeechMs
+  private var speechFrames = 0
+  private var requiredSpeechFrames = 0
+  private var redemptionCounter = 0
   private var strictMs = 0
 
-  /** Whether the agent's voice is playing, so its echo is not taken for the user. */
+  /** Whether the agent's voice is playing. */
   var talkingOver = false
 
   fun process(frame: ShortArray): Event? {
-    val level = levelDb(frame)
-    strictMs = if (talkingOver) talkOverTailMs else max(strictMs - frameMs, 0)
+    strictMs = if (talkingOver) TALK_OVER_TAIL_MS else max(strictMs - FRAME_MS, 0)
     val strict = strictMs > 0
-    if (heardMs < warmUpMs) {
-      // The room's own noise, averaged, is where listening starts from.
-      heardMs += frameMs
-      val frames = heardMs / frameMs
-      background = if (background.isNaN()) level else background + (level - background) / frames
-      preRoll.addLast(frame)
-      while (preRoll.size * frameMs > preRollMs) preRoll.removeFirst()
-      return null
-    }
-    if (!speaking) {
-      val onset = background + onsetDb + if (strict) talkOverExtraDb else 0.0
-      if (level > max(onset, floorLimitDb)) {
-        speaking = true
-        confirmed = false
-        requiredSpeechMs = if (strict) talkOverMinSpeechMs else minSpeechMs
-        speechMs = frameMs
-        quietMs = 0
-        utterance.clear()
-        utterance.addAll(preRoll)
-        utterance.add(frame)
-        preRoll.clear()
-        return Event.Start
-      }
-      learnBackground(level, rise = 0.02)
-      preRoll.addLast(frame)
-      while (preRoll.size * frameMs > preRollMs) preRoll.removeFirst()
-      return null
-    }
-    utterance.add(frame)
-    learnBackground(level, rise = 0.001)
-    if (level > max(background + sustainDb, floorLimitDb)) {
-      speechMs += frameMs
-      quietMs = 0
-    } else {
-      quietMs += frameMs
-    }
-    if (!confirmed && speechMs >= requiredSpeechMs) {
-      confirmed = true
-      return Event.Confirmed
-    }
-    if (quietMs >= redemptionMs || utterance.size * frameMs >= maxUtteranceMs) return finish()
-    return null
+    // The model sees every frame, even ones the level rules out, to keep its state continuous.
+    val modelProbability = model.speechProbability(frame)
+    val minLevelDb = if (strict) TALK_OVER_MIN_LEVEL_DB else FLOOR_LIMIT_DB
+    val probability = if (levelDb(frame) < minLevelDb) 0f else modelProbability
+    val isSpeech =
+      probability >= if (strict) TALK_OVER_SPEECH_THRESHOLD else POSITIVE_SPEECH_THRESHOLD
+    frames.add(frame)
+    return if (speaking) hear(probability, isSpeech) else listen(isSpeech, strict)
   }
 
   /** Ends whatever is being heard, as when the microphone closes. */
   fun flush(): Event? = if (speaking) finish() else null
 
+  private fun listen(isSpeech: Boolean, strict: Boolean): Event? {
+    if (!isSpeech) {
+      while (frames.size > PRE_SPEECH_PAD_MS / FRAME_MS) frames.removeAt(0)
+      return null
+    }
+    speaking = true
+    confirmed = false
+    speechFrames = 1
+    redemptionCounter = 0
+    requiredSpeechFrames = (if (strict) TALK_OVER_MIN_SPEECH_MS else MIN_SPEECH_MS) / FRAME_MS
+    return Event.Start
+  }
+
+  private fun hear(probability: Float, isSpeech: Boolean): Event? {
+    if (isSpeech) {
+      speechFrames++
+      redemptionCounter = 0
+    } else if (probability < NEGATIVE_SPEECH_THRESHOLD) {
+      redemptionCounter++
+    }
+    return when {
+      !confirmed && speechFrames >= requiredSpeechFrames -> {
+        confirmed = true
+        Event.Confirmed
+      }
+      redemptionCounter >= REDEMPTION_MS / FRAME_MS -> finish()
+      frames.size * FRAME_MS >= MAX_UTTERANCE_MS -> finish()
+      else -> null
+    }
+  }
+
   private fun finish(): Event {
+    val event = if (confirmed) Event.Utterance(join(frames)) else Event.Cancel
     speaking = false
-    val event = if (confirmed) Event.Utterance(join(utterance)) else Event.Cancel
-    utterance.clear()
+    frames.clear()
     return event
   }
 
-  // Falls quickly to a quieter room and rises slowly, and more slowly still while someone talks, so
-  // a long sentence is not taken for noise while a steady hum soon is.
-  private fun learnBackground(level: Double, rise: Double) {
-    background += (level - background) * if (level < background) 0.3 else rise
-  }
-
   companion object {
+    /** Silero's 512-sample frames at 16 kHz. */
+    private const val FRAME_MS = 32
+
+    // The web client's settings: a frame this likely to be speech starts or continues an utterance,
+    // and one less likely than the negative threshold counts toward the pause that ends it.
+    private const val POSITIVE_SPEECH_THRESHOLD = 0.5f
+    private const val NEGATIVE_SPEECH_THRESHOLD = 0.35f
+    private const val MIN_SPEECH_MS = 160
+    private const val REDEMPTION_MS = 600
+    private const val PRE_SPEECH_PAD_MS = 300
+    private const val MAX_UTTERANCE_MS = 30_000
+
+    /** Quieter than this is never speech. */
+    private const val FLOOR_LIMIT_DB = -58.0
+
+    // While the agent's voice plays, speech must be this likely, this loud and this long, so the
+    // echo the phone's canceller leaves behind is not taken for the user.
+    private const val TALK_OVER_SPEECH_THRESHOLD = 0.8f
+    private const val TALK_OVER_MIN_LEVEL_DB = -40.0
+    private const val TALK_OVER_MIN_SPEECH_MS = 400
+
+    /** How long that stricter hearing lasts after the voice stops, while its echo dies away. */
+    private const val TALK_OVER_TAIL_MS = 500
+
     fun levelDb(frame: ShortArray): Double {
       if (frame.isEmpty()) return -100.0
       var sum = 0.0

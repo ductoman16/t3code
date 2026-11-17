@@ -76,6 +76,7 @@ class T3VoiceModeModule : Module() {
     routeLikeACall()
     val started = VoiceModeMicrophone(
       File(context.cacheDir, "voice-mode"),
+      speechModel = { context.assets.open(SileroVad.ASSET).use { it.readBytes() } },
       talkingOver = { voice?.speaking == true }
     ) { sendEvent("onSpeech", it) }
     try {
