@@ -92,6 +92,27 @@ describe("createAndroidSpeaker", () => {
     expect(speaker.isActive()).toBe(false);
   });
 
+  it("captions the sentence being read, keeps the last one, and clears it when stopped", async () => {
+    const { speaker, said, voice } = await prepared();
+    let changes = 0;
+    speaker.subscribeCaption(() => (changes += 1));
+    speaker.say("One.");
+    speaker.say("Two.");
+    expect(speaker.caption()).toBe("");
+
+    voice("start", said[0]!.id);
+    expect(speaker.caption()).toBe("One.");
+    voice("done", said[0]!.id);
+    voice("start", said[1]!.id);
+    expect(speaker.caption()).toBe("Two.");
+    voice("done", said[1]!.id);
+    expect(speaker.caption()).toBe("Two.");
+
+    speaker.stop();
+    expect(speaker.caption()).toBe("");
+    expect(changes).toBe(3);
+  });
+
   it("remembers what it said for a moment, as the microphone may hear it", async () => {
     const { speaker, said, voice, advance } = await prepared();
     speaker.say("Hello there.");

@@ -69,6 +69,7 @@ import {
   ThreadRouteScreen,
 } from "./features/threads/ThreadRouteScreen";
 import { McpAppFullscreenScreen } from "./features/threads/McpAppFullscreenScreen";
+import { VoiceModeCallRouteScreen } from "./features/voice-mode/VoiceModeCallScreen";
 import { ConnectionsRouteScreen } from "./features/connection/ConnectionsRouteScreen";
 import { ConnectionsNewRouteScreen } from "./features/connection/ConnectionsNewRouteScreen";
 import { AddProjectDestinationRoute } from "./features/projects/AddProjectDestinationRoute";
@@ -636,6 +637,11 @@ const RootStackConfig = createWorkspaceStackNavigator({
       screen: BrowserPreviewRouteScreen,
       linking: `${THREAD_LINKING_PREFIX}/browser`,
       options: { ...modalRoute({ header: "solid" }), gestureEnabled: false },
+    }),
+    // No link: a call screen only means something while voice mode is on in this app.
+    VoiceModeCall: createNativeStackScreen({
+      screen: VoiceModeCallRouteScreen,
+      options: immersiveRoute(),
     }),
     ThreadReview: createNativeStackScreen({
       screen: ReviewSheet,

@@ -129,7 +129,7 @@ import {
 import { useStartSideChat } from "./useStartSideChat";
 import { useThreadStatusAnnouncements } from "./useThreadStatusAnnouncements";
 import {
-  toggleVoiceMode,
+  turnOnVoiceMode,
   useVoiceModeState,
   useVoiceModeThread,
   voiceModeAvailable,
@@ -691,6 +691,16 @@ function ThreadRouteContent(
     });
   };
 
+  const handleOpenVoiceCall = () => {
+    if (!selectedThread) return;
+    // The call stays on when its screen closes; Hang up there or in the notification ends it.
+    if (voiceMode.power === "off") turnOnVoiceMode();
+    void navigation.navigate("VoiceModeCall", {
+      environmentId: String(selectedThread.environmentId),
+      threadId: String(selectedThread.id),
+    });
+  };
+
   useVoiceModeThread({
     environmentId: selectedThread?.environmentId ?? null,
     threadId: selectedThread?.id ?? null,
@@ -1024,8 +1034,7 @@ function ThreadRouteContent(
                   voiceModeAvailable
                     ? {
                         on: voiceMode.power !== "off",
-                        starting: voiceMode.power === "starting",
-                        onToggle: toggleVoiceMode,
+                        onPress: handleOpenVoiceCall,
                       }
                     : null
                 }
