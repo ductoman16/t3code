@@ -2998,10 +2998,10 @@ export const ChatComposer = memo(function ChatComposer(props: ChatComposerProps)
         submitComposer(
           undefined,
           resolveComposerDispatchMode({
-            running: phase === "running",
+            running: phase === "running" || phase === "connecting",
             alternateModifier: false,
             activeTurnDefault: "steer",
-            canSteer: !isCompacting,
+            canSteer,
           }),
         ) === true,
     ),
