@@ -135,6 +135,12 @@ import {
 } from "./thread-inspector-preview";
 import { useStartSideChat } from "./useStartSideChat";
 import { useThreadStatusAnnouncements } from "./useThreadStatusAnnouncements";
+import {
+  toggleVoiceMode,
+  useVoiceModeState,
+  useVoiceModeThread,
+  voiceModeAvailable,
+} from "../voice-mode/voiceMode";
 import type { ThreadInspectorMode, ThreadInspectorTarget } from "./thread-inspector-navigation";
 import { useSelectWorkspaceDetail } from "../layout/workspace/useSelectWorkspaceDetail";
 
@@ -550,7 +556,9 @@ function ThreadRouteContent(
       : scopeThreadRef(delegatedFrom.environmentId, delegatedFrom.threadId);
   // The title it had at delegation, until this client sees the parent itself.
   const delegatedFromThread = useThreadShell(delegatedFromRef);
+  const voiceMode = useVoiceModeState();
   const headerSubtitle = [
+    voiceMode.power === "off" ? null : VOICE_MODE_STATUS[voiceMode.activity],
     selectedThreadProject?.title ?? null,
     selectedEnvironmentConnection?.environmentLabel ?? null,
     // A linked environment's delegated task names its parent; other linked work its origin.
@@ -702,6 +710,15 @@ function ThreadRouteContent(
       },
     });
   };
+
+  useVoiceModeThread({
+    environmentId: selectedThread?.environmentId ?? null,
+    threadId: selectedThread?.id ?? null,
+    // On a call, a second remark changes what the agent is doing, so it steers the running turn.
+    submit: () => void composer.onSendMessage("steer"),
+    isTurnRunning: () => composer.activeThreadBusy,
+    interrupt: () => void handleStopThread(),
+  });
 
   const handleResumeQueue = async () => {
     if (!selectedThread) return;
@@ -1039,6 +1056,15 @@ function ThreadRouteContent(
                 subtitle={threadStatusLabel ?? headerSubtitle}
                 gitControls={threadGitControlProps}
                 hasThreadCwd={selectedThreadCwd !== null}
+                voiceMode={
+                  voiceModeAvailable
+                    ? {
+                        on: voiceMode.power !== "off",
+                        starting: voiceMode.power === "starting",
+                        onToggle: toggleVoiceMode,
+                      }
+                    : null
+                }
                 inspectorMode={inspectorMode}
                 onOpenFilesInspector={handleOpenFilesInspector}
                 onReturnToThread={props.onReturnToThread}
@@ -1180,3 +1206,11 @@ function ThreadInspectorPreviewWhileVisible(props: Parameters<typeof ThreadInspe
   const { panes } = useWorkspacePaneState();
   return panes.auxiliaryPaneVisible ? <ThreadInspectorPreview {...props} /> : null;
 }
+
+const VOICE_MODE_STATUS = {
+  listening: "Listening",
+  hearing: "Hearing you",
+  transcribing: "Transcribing",
+  sending: "Sending",
+  speaking: "Speaking",
+} as const;

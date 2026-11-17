@@ -29,15 +29,16 @@ export class VoiceModeError extends Schema.TaggedError<VoiceModeError>()("VoiceM
 
 export const isVoiceModeError = Schema.is(VoiceModeError);
 
-export interface SpeechSourceHandlers {
+/** `Audio` is how a finished utterance reaches the transcriber: samples on web, a file on mobile. */
+export interface SpeechSourceHandlers<Audio = Float32Array> {
   /** Sound that may be speech has begun. */
   readonly onSpeechStart: () => void;
   /** The sound has lasted long enough to be speech. */
   readonly onSpeechConfirmed: () => void;
   /** The sound was too short to be speech; no utterance follows. */
   readonly onSpeechCancel: () => void;
-  /** One finished utterance: 16 kHz mono samples. */
-  readonly onUtterance: (audio: Float32Array) => void;
+  /** One finished utterance. */
+  readonly onUtterance: (audio: Audio) => void;
   /** The microphone failed after it started. */
   readonly onError: (error: unknown) => void;
 }
@@ -48,11 +49,11 @@ export interface SpeechSource {
   stop(): Promise<void>;
 }
 
-export interface VoiceModeTranscriber {
+export interface VoiceModeTranscriber<Audio = Float32Array> {
   /** Rejects with a VoiceModeError when transcription cannot work right now. */
   check(signal: AbortSignal): Promise<void>;
   /** Resolves "" for audio with no speech in it. */
-  transcribe(audio: Float32Array, signal: AbortSignal): Promise<string>;
+  transcribe(audio: Audio, signal: AbortSignal): Promise<string>;
 }
 
 export interface VoiceModeSpeaker {
@@ -117,9 +118,9 @@ export interface VoiceModeDraft {
   replace(text: string): boolean;
 }
 
-export interface VoiceModeDependencies {
-  readonly createSpeechSource: (handlers: SpeechSourceHandlers) => SpeechSource;
-  readonly transcriber: VoiceModeTranscriber;
+export interface VoiceModeDependencies<Audio = Float32Array> {
+  readonly createSpeechSource: (handlers: SpeechSourceHandlers<Audio>) => SpeechSource;
+  readonly transcriber: VoiceModeTranscriber<Audio>;
   readonly speaker: VoiceModeSpeaker;
   /** Runs `run` once after `delayMs`; the returned function cancels it. */
   readonly schedule: (delayMs: number, run: () => void) => () => void;
@@ -168,13 +169,13 @@ function describe(error: unknown): string {
   return `Voice mode stopped unexpectedly: ${detail}`;
 }
 
-interface Utterance {
-  readonly audio: Float32Array;
+interface Utterance<Audio> {
+  readonly audio: Audio;
   /** What was being said when the utterance began, kept through transcription delays. */
   readonly replyAtStart: string;
 }
 
-export class VoiceModeController {
+export class VoiceModeController<Audio = Float32Array> {
   private current: VoiceModeState = OFF;
   private readonly listeners = new Set<() => void>();
   // Bumped on every start and stop, so work begun by an earlier run is dropped when it settles.
@@ -193,7 +194,7 @@ export class VoiceModeController {
   private soundStarted = false;
   private speechConfirmed = false;
   private replyAtSpeechStart = "";
-  private utterances: Utterance[] = [];
+  private utterances: Utterance<Audio>[] = [];
   private transcribingRun: number | null = null;
 
   /** The draft as voice mode last left it. Sent after a pause unless someone edits it first. */
@@ -210,9 +211,9 @@ export class VoiceModeController {
   /** Replies the user talked over; the rest of each is not said. */
   private readonly repliesCutOff = new Set<string>();
 
-  private readonly dependencies: VoiceModeDependencies;
+  private readonly dependencies: VoiceModeDependencies<Audio>;
 
-  constructor(dependencies: VoiceModeDependencies) {
+  constructor(dependencies: VoiceModeDependencies<Audio>) {
     this.dependencies = dependencies;
   }
 
@@ -288,27 +289,35 @@ export class VoiceModeController {
   }
 
   /**
-   * Sends a composer's draft through `send`. Every message goes this way, spoken or typed, so
-   * that when voice mode has come on or gone off since the thread's model last heard, the message
-   * says so after the user's own words.
+   * What a message to `thread` should say: the user's words, followed by a note when voice mode
+   * has come on or gone off since the thread's model last heard. Call `sent` once the message has
+   * gone, so the note is not repeated. Every message goes this way, spoken or typed.
    */
-  sendDraft(draft: VoiceModeDraft, send: () => boolean): boolean {
-    const text = draft.read();
+  noteMessage(thread: string, text: string): { readonly text: string; readonly sent: () => void } {
     const on = this.current.power === "on";
     // An empty message has nothing to carry the note, and a command must stay a command.
-    const carriesNote =
-      text.trim() !== "" &&
-      !text.trimStart().startsWith("/") &&
-      on !== this.spokenTo.has(draft.thread);
-    const noted = on ? withVoiceModeInstructions(text) : withVoiceModeEnded(text);
+    if (text.trim() === "" || text.trimStart().startsWith("/") || on === this.spokenTo.has(thread))
+      return { text, sent: () => {} };
+    return {
+      text: on ? withVoiceModeInstructions(text) : withVoiceModeEnded(text),
+      sent: () => {
+        if (on) this.spokenTo.add(thread);
+        else this.spokenTo.delete(thread);
+      },
+    };
+  }
+
+  /** Sends a composer's draft through `send`, with the note `noteMessage` gives it. */
+  sendDraft(draft: VoiceModeDraft, send: () => boolean): boolean {
+    const text = draft.read();
+    const note = this.noteMessage(draft.thread, text);
     // A draft that cannot take the note is sent as it is; the note goes with the next message.
-    if (!carriesNote || !draft.replace(noted)) return send();
+    if (note.text === text || !draft.replace(note.text)) return send();
     if (!send()) {
       draft.replace(text);
       return false;
     }
-    if (on) this.spokenTo.add(draft.thread);
-    else this.spokenTo.delete(draft.thread);
+    note.sent();
     return true;
   }
 
@@ -359,7 +368,7 @@ export class VoiceModeController {
       ) ?? null;
   }
 
-  private speechHandlers(run: number): SpeechSourceHandlers {
+  private speechHandlers(run: number): SpeechSourceHandlers<Audio> {
     return {
       onSpeechStart: () => {
         if (run !== this.run) return;
@@ -413,7 +422,7 @@ export class VoiceModeController {
     this.refresh();
   }
 
-  private async hear(run: number, utterance: Utterance): Promise<void> {
+  private async hear(run: number, utterance: Utterance<Audio>): Promise<void> {
     const abort = this.abort;
     if (!abort) return;
     const { speaker, transcriber } = this.dependencies;
