@@ -88,4 +88,57 @@ class SpeechDetectorTest {
 
     assertTrue(detector.flush() is SpeechDetector.Event.Utterance)
   }
+
+  @Test
+  fun ignoresTheVoicesEchoWhileItPlays() {
+    val echo = { repeat(1000) { voice(0.005) } }
+    val listening = SpeechDetector()
+    listening.feed(repeat(1000) { quiet() })
+    val talkingOver = SpeechDetector()
+    talkingOver.feed(repeat(1000) { quiet() })
+    talkingOver.talkingOver = true
+
+    assertEquals(SpeechDetector.Event.Start, listening.feed(echo()).first())
+    assertTrue(talkingOver.feed(echo()).isEmpty())
+  }
+
+  @Test
+  fun dropsAShortWordHeardWhileTheVoicePlays() {
+    val detector = SpeechDetector()
+    detector.feed(repeat(1000) { quiet() })
+    detector.talkingOver = true
+
+    val events = detector.feed(repeat(240) { voice(0.2) } + repeat(700) { quiet() })
+
+    assertEquals(listOf(SpeechDetector.Event.Start, SpeechDetector.Event.Cancel), events)
+  }
+
+  @Test
+  fun hearsTheUserTalkingOverTheVoice() {
+    val detector = SpeechDetector()
+    detector.feed(repeat(1000) { quiet() })
+    detector.talkingOver = true
+
+    val events = detector.feed(repeat(600) { voice(0.2) } + repeat(700) { quiet() })
+
+    assertEquals(SpeechDetector.Event.Start, events[0])
+    assertEquals(SpeechDetector.Event.Confirmed, events[1])
+    assertTrue(events[2] is SpeechDetector.Event.Utterance)
+  }
+
+  @Test
+  fun listensNormallyAgainOnceTheVoiceHasStopped() {
+    val detector = SpeechDetector()
+    detector.feed(repeat(1000) { quiet() })
+    detector.talkingOver = true
+    detector.feed(repeat(1000) { quiet() })
+    detector.talkingOver = false
+
+    val duringTail = detector.feed(repeat(240) { voice(0.2) } + repeat(700) { quiet() })
+    val after = detector.feed(repeat(240) { voice(0.2) } + repeat(700) { quiet() })
+
+    assertEquals(listOf(SpeechDetector.Event.Start, SpeechDetector.Event.Cancel), duringTail)
+    assertEquals(SpeechDetector.Event.Confirmed, after[1])
+    assertTrue(after[2] is SpeechDetector.Event.Utterance)
+  }
 }

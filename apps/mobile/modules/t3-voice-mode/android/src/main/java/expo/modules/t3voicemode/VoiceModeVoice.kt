@@ -17,6 +17,10 @@ internal class VoiceModeVoice(
 ) {
   private var engine: TextToSpeech? = null
 
+  /** Whether a sentence is playing now. Read from the microphone's thread. */
+  @Volatile var speaking = false
+    private set
+
   suspend fun prepare() {
     if (engine != null) return
     val ready = CompletableDeferred<Int>()
@@ -32,15 +36,22 @@ internal class VoiceModeVoice(
         .build()
     )
     created.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-      override fun onStart(id: String) = onEvent(mapOf("type" to "start", "id" to id))
-      override fun onDone(id: String) = onEvent(mapOf("type" to "done", "id" to id))
-      override fun onStop(id: String, interrupted: Boolean) =
-        onEvent(mapOf("type" to "done", "id" to id))
+      override fun onStart(id: String) {
+        speaking = true
+        onEvent(mapOf("type" to "start", "id" to id))
+      }
+      override fun onDone(id: String) = done(id)
+      override fun onStop(id: String, interrupted: Boolean) = done(id)
       @Deprecated("Replaced by onError(String, Int)")
-      override fun onError(id: String) = onEvent(mapOf("type" to "done", "id" to id))
-      override fun onError(id: String, code: Int) = onEvent(mapOf("type" to "done", "id" to id))
+      override fun onError(id: String) = done(id)
+      override fun onError(id: String, code: Int) = done(id)
     })
     engine = created
+  }
+
+  private fun done(id: String) {
+    speaking = false
+    onEvent(mapOf("type" to "done", "id" to id))
   }
 
   fun say(id: String, text: String, rate: Double) {
@@ -53,10 +64,12 @@ internal class VoiceModeVoice(
 
   fun stop() {
     engine?.stop()
+    speaking = false
   }
 
   fun shutDown() {
     engine?.shutdown()
     engine = null
+    speaking = false
   }
 }

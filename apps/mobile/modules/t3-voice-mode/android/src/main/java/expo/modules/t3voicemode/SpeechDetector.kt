@@ -21,7 +21,12 @@ internal class SpeechDetector(
   /** Quieter than this is never speech, however quiet the room. */
   private val floorLimitDb: Double = -58.0,
   /** Time spent learning the room before listening for speech. */
-  private val warmUpMs: Int = 400
+  private val warmUpMs: Int = 400,
+  /** How much louder, and how much longer, speech must be while the agent's voice is playing. */
+  private val talkOverExtraDb: Double = 10.0,
+  private val talkOverMinSpeechMs: Int = 400,
+  /** How long that stricter hearing lasts after the voice stops, while its echo dies away. */
+  private val talkOverTailMs: Int = 500
 ) {
   sealed interface Event {
     data object Start : Event
@@ -38,9 +43,16 @@ internal class SpeechDetector(
   private var confirmed = false
   private var speechMs = 0
   private var quietMs = 0
+  private var requiredSpeechMs = minSpeechMs
+  private var strictMs = 0
+
+  /** Whether the agent's voice is playing, so its echo is not taken for the user. */
+  var talkingOver = false
 
   fun process(frame: ShortArray): Event? {
     val level = levelDb(frame)
+    strictMs = if (talkingOver) talkOverTailMs else max(strictMs - frameMs, 0)
+    val strict = strictMs > 0
     if (heardMs < warmUpMs) {
       // The room's own noise, averaged, is where listening starts from.
       heardMs += frameMs
@@ -51,9 +63,11 @@ internal class SpeechDetector(
       return null
     }
     if (!speaking) {
-      if (level > max(background + onsetDb, floorLimitDb)) {
+      val onset = background + onsetDb + if (strict) talkOverExtraDb else 0.0
+      if (level > max(onset, floorLimitDb)) {
         speaking = true
         confirmed = false
+        requiredSpeechMs = if (strict) talkOverMinSpeechMs else minSpeechMs
         speechMs = frameMs
         quietMs = 0
         utterance.clear()
@@ -75,7 +89,7 @@ internal class SpeechDetector(
     } else {
       quietMs += frameMs
     }
-    if (!confirmed && speechMs >= minSpeechMs) {
+    if (!confirmed && speechMs >= requiredSpeechMs) {
       confirmed = true
       return Event.Confirmed
     }

@@ -15,7 +15,7 @@ import java.io.File
  */
 class T3VoiceModeModule : Module() {
   private var microphone: VoiceModeMicrophone? = null
-  private var voice: VoiceModeVoice? = null
+  @Volatile private var voice: VoiceModeVoice? = null
   private var previousMode: Int? = null
 
   private val context: Context get() = requireNotNull(appContext.reactContext)
@@ -68,9 +68,10 @@ class T3VoiceModeModule : Module() {
   private fun startListening() {
     if (microphone != null) return
     routeLikeACall()
-    val started = VoiceModeMicrophone(File(context.cacheDir, "voice-mode")) {
-      sendEvent("onSpeech", it)
-    }
+    val started = VoiceModeMicrophone(
+      File(context.cacheDir, "voice-mode"),
+      talkingOver = { voice?.speaking == true }
+    ) { sendEvent("onSpeech", it) }
     try {
       started.start()
     } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
