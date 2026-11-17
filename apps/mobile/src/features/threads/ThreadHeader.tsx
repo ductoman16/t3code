@@ -38,7 +38,7 @@ export function ThreadHeader(props: {
     ? [
         {
           accessibilityLabel: props.voiceMode.on ? "Stop voice mode" : "Start voice mode",
-          icon: "mic",
+          icon: "phone.connection",
           selected: props.voiceMode.on,
           loading: props.voiceMode.starting,
           separateBackground: false,
