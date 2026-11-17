@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { Spinner } from "../components/ui/spinner";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../components/ui/tooltip";
 import { toggleVoiceMode, useVoiceModeState, useVoiceModeTranscription } from "./voiceMode";
-import type { VoiceModeActivity } from "./voiceModeController";
+import type { VoiceModeActivity } from "@t3tools/client-runtime/voice-mode";
 
 const ACTIVITY_LABELS: Record<VoiceModeActivity, string> = {
   listening: "Listening",

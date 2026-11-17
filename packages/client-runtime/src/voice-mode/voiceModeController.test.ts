@@ -7,8 +7,8 @@ import {
   type SpeechSourceHandlers,
   type VoiceModeSpeaker,
   type VoiceModeTarget,
-} from "./voiceModeController";
-import { withVoiceModeEnded, withVoiceModeInstructions } from "./voiceModeInstructions";
+} from "./voiceModeController.ts";
+import { withVoiceModeEnded, withVoiceModeInstructions } from "./voiceModeInstructions.ts";
 
 const SEND_AFTER_SILENCE_MS = 800;
 const AUDIO = new Float32Array(1600);
@@ -130,11 +130,15 @@ class StubComposer implements VoiceModeTarget {
   private replies: ReplyHandlers | null = null;
 
   /** The controller every send goes through, as it does in the app. */
-  constructor(
-    readonly key: string,
-    private readonly voiceMode: VoiceModeController,
-    readonly thread = key,
-  ) {}
+  readonly key: string;
+  readonly thread: string;
+  private readonly voiceMode: VoiceModeController;
+
+  constructor(key: string, voiceMode: VoiceModeController, thread = key) {
+    this.key = key;
+    this.voiceMode = voiceMode;
+    this.thread = thread;
+  }
 
   readDraft = () => this.draft;
   commitDraft = (text: string) => {

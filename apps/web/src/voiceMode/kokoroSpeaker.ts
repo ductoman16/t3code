@@ -1,5 +1,5 @@
 import type { KokoroRequest, KokoroResponse } from "./kokoroProtocol";
-import { VoiceModeError, type VoiceModeSpeaker } from "./voiceModeController";
+import { VoiceModeError, type VoiceModeSpeaker } from "@t3tools/client-runtime/voice-mode";
 
 // How long after a sentence ends the microphone may still be hearing its echo.
 const ECHO_TAIL_MS = 4_000;

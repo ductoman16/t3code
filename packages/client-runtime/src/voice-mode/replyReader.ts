@@ -1,5 +1,5 @@
-import { createSpeechChunker, type SpeechChunker } from "./speakableText";
-import type { ReplyHandlers } from "./voiceModeController";
+import { createSpeechChunker, type SpeechChunker } from "./speakableText.ts";
+import type { ReplyHandlers } from "./voiceModeController.ts";
 
 /** The part of a thread's timeline item that reading replies depends on. */
 export interface TimelineItem {

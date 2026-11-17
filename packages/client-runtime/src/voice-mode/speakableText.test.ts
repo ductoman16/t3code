@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { createSpeechChunker } from "./speakableText";
+import { createSpeechChunker } from "./speakableText.ts";
 
 /** Feeds the reply one character at a time, the worst case for streaming. */
 function speakStreamed(reply: string): string[] {
