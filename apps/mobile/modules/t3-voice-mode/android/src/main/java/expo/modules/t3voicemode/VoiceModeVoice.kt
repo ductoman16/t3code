@@ -42,6 +42,7 @@ internal class VoiceModeVoice(
       }
       override fun onDone(id: String) = done(id)
       override fun onStop(id: String, interrupted: Boolean) = done(id)
+
       @Deprecated("Replaced by onError(String, Int)")
       override fun onError(id: String) = done(id)
       override fun onError(id: String, code: Int) = done(id)

@@ -20,8 +20,10 @@ import java.io.File
  */
 class T3VoiceModeModule : Module() {
   private var microphone: VoiceModeMicrophone? = null
+
   @Volatile private var voice: VoiceModeVoice? = null
   private var previousMode: Int? = null
+
   /** Read and written on the main thread only. */
   private var javaScriptTask: Int? = null
 
@@ -40,11 +42,7 @@ class T3VoiceModeModule : Module() {
 
     AsyncFunction("stopListening") { stopListening() }
 
-    AsyncFunction("prepareVoice") Coroutine { ->
-      val created = voice ?: VoiceModeVoice(context) { sendEvent("onVoice", it) }
-      created.prepare()
-      voice = created
-    }
+    AsyncFunction("prepareVoice") Coroutine suspend { prepareVoice() }
 
     Function("say") { id: String, text: String, rate: Double ->
       checkNotNull(voice) { "The voice is not ready." }.say(id, text, rate)
@@ -69,6 +67,12 @@ class T3VoiceModeModule : Module() {
       voice?.shutDown()
       voice = null
     }
+  }
+
+  private suspend fun prepareVoice() {
+    val created = voice ?: VoiceModeVoice(context) { sendEvent("onVoice", it) }
+    created.prepare()
+    voice = created
   }
 
   private fun startListening() {
@@ -96,7 +100,9 @@ class T3VoiceModeModule : Module() {
     microphone = null
     VoiceModeService.stop(context)
     UiThreadUtil.runOnUiThread {
-      javaScriptTask?.let { HeadlessJsTaskContext.getInstance(context as ReactContext).finishTask(it) }
+      javaScriptTask?.let {
+        HeadlessJsTaskContext.getInstance(context as ReactContext).finishTask(it)
+      }
       javaScriptTask = null
     }
     restoreRoute()
