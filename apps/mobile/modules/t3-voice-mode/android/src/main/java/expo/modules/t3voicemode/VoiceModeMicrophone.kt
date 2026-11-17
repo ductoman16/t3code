@@ -16,6 +16,8 @@ import java.util.UUID
  */
 internal class VoiceModeMicrophone(
   private val directory: File,
+  /** Whether the agent's voice is playing, checked on every frame. */
+  private val talkingOver: () -> Boolean,
   private val onEvent: (Map<String, Any?>) -> Unit
 ) {
   private var record: AudioRecord? = null
@@ -75,6 +77,7 @@ internal class VoiceModeMicrophone(
           filled += read
         }
         if (!running) break
+        detector.talkingOver = talkingOver()
         detector.process(frame.copyOf())?.let(::report)
       }
     } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
