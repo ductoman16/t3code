@@ -26,8 +26,8 @@ export function ThreadHeader(props: {
   /** Null where voice mode is not available. */
   readonly voiceMode?: {
     readonly on: boolean;
-    readonly starting: boolean;
-    readonly onToggle: () => void;
+    /** Starts voice mode when it is off; either way, opens the call. */
+    readonly onPress: () => void;
   } | null;
 }) {
   const gt = useGT();
@@ -41,12 +41,11 @@ export function ThreadHeader(props: {
   const voiceAction: AppBarAction[] = props.voiceMode
     ? [
         {
-          accessibilityLabel: props.voiceMode.on ? "Stop voice mode" : "Start voice mode",
+          accessibilityLabel: props.voiceMode.on ? "Open call" : "Start voice mode",
           icon: "phone.connection",
           selected: props.voiceMode.on,
-          loading: props.voiceMode.starting,
           separateBackground: false,
-          onPress: props.voiceMode.onToggle,
+          onPress: props.voiceMode.onPress,
         },
       ]
     : [];

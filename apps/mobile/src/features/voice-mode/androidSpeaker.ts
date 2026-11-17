@@ -10,6 +10,12 @@ interface Sentence {
 /** How long a finished sentence may still come back through the microphone as an echo. */
 const ECHO_MS = 2000;
 
+export interface AndroidSpeaker extends VoiceModeSpeaker {
+  /** The sentence being read aloud, or the last one read until speech is stopped. */
+  caption(): string;
+  subscribeCaption(listener: () => void): () => void;
+}
+
 /**
  * Says sentences with Android's text-to-speech. Android cannot pause speech, so a pause stops it
  * and a resume starts again from the sentence that was cut off.
@@ -21,16 +27,23 @@ export function createAndroidSpeaker(
   >,
   readRate: () => number,
   now: () => number = Date.now,
-): VoiceModeSpeaker {
+): AndroidSpeaker {
   let queue: Sentence[] = [];
   let paused = false;
   let nextId = 0;
   let spoken: { text: string; until: number } | null = null;
   let subscription: { remove(): void } | null = null;
   const listeners = new Set<() => void>();
+  let caption = "";
+  const captionListeners = new Set<() => void>();
 
   const notify = () => {
     for (const listener of listeners) listener();
+  };
+  const setCaption = (text: string) => {
+    if (text === caption) return;
+    caption = text;
+    for (const listener of captionListeners) listener();
   };
   const speak = (sentence: Sentence) => native.say(sentence.id, sentence.text, readRate());
   const withNewId = (text: string): Sentence => ({ id: `s${nextId++}`, text });
@@ -43,6 +56,7 @@ export function createAndroidSpeaker(
         const sentence = queue[index]!;
         if (event.type === "start") {
           spoken = { text: sentence.text, until: Number.POSITIVE_INFINITY };
+          setCaption(sentence.text);
           return;
         }
         // A sentence stopped by a pause is said again on resume.
@@ -84,11 +98,13 @@ export function createAndroidSpeaker(
       queue = [];
       paused = false;
       native.stopSpeaking();
+      setCaption("");
       if (wasActive) notify();
     },
     shutDown() {
       queue = [];
       paused = false;
+      setCaption("");
       subscription?.remove();
       subscription = null;
       native.shutDownVoice();
@@ -98,6 +114,11 @@ export function createAndroidSpeaker(
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
+    },
+    caption: () => caption,
+    subscribeCaption(listener) {
+      captionListeners.add(listener);
+      return () => captionListeners.delete(listener);
     },
   };
 }

@@ -30,6 +30,7 @@ const SEND_AFTER_SILENCE_MS = 900;
 function createVoiceMode() {
   const native = nativeVoiceMode;
   if (!native) return null;
+  const speaker = createAndroidSpeaker(native, () => READING_SPEED);
   let askingForMicrophone = false;
   // Keeps the stored transcription choice loaded, so the first phrase uses it.
   appAtomRegistry.mount(voiceRouteAtom);
@@ -58,7 +59,7 @@ function createVoiceMode() {
           : "The environment chosen for transcription in Settings → Voice is not connected.",
       discard: (uri) => native.deleteUtterance(uri),
     }),
-    speaker: createAndroidSpeaker(native, () => READING_SPEED),
+    speaker,
     schedule: (delayMs, run) => {
       const timer = setTimeout(run, delayMs);
       return () => clearTimeout(timer);
@@ -84,11 +85,12 @@ function createVoiceMode() {
   AppState.addEventListener("change", call.appStateChanged);
   // Keeps JavaScript timers running with the screen off; the native module ends it with the call.
   AppRegistry.registerHeadlessTask("T3VoiceMode", () => () => new Promise<void>(() => {}));
-  return controller;
+  return { controller, speaker };
 }
 
+const created = createVoiceMode();
 /** One voice mode for the app: it follows the thread on screen. Null without the native module. */
-const voiceMode = createVoiceMode();
+const voiceMode = created?.controller ?? null;
 
 export const voiceModeAvailable = voiceMode !== null;
 
@@ -107,8 +109,20 @@ export function useVoiceModeState(): VoiceModeState {
   );
 }
 
-export function toggleVoiceMode(): void {
-  voiceMode?.toggle();
+/** The agent's sentence being read aloud, or the last one read; "" when there is none. */
+export function useVoiceModeCaption(): string {
+  return useSyncExternalStore(
+    created?.speaker.subscribeCaption ?? (() => () => {}),
+    () => created?.speaker.caption() ?? "",
+  );
+}
+
+export function turnOnVoiceMode(): void {
+  void voiceMode?.turnOn();
+}
+
+export function turnOffVoiceMode(): void {
+  voiceMode?.turnOff();
 }
 
 /**
