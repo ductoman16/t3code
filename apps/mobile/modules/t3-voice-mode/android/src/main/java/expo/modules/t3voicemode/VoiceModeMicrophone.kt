@@ -26,6 +26,7 @@ internal class VoiceModeMicrophone(
   private var effects: List<android.media.audiofx.AudioEffect> = emptyList()
   private var thread: Thread? = null
   private var vad: SileroVad? = null
+
   @Volatile private var running = false
 
   @SuppressLint("MissingPermission") // The app asks for the microphone before it starts voice mode.
@@ -46,7 +47,13 @@ internal class VoiceModeMicrophone(
       error("The microphone could not be opened.")
     }
     effects = listOfNotNull(
-      if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(audio.audioSessionId) else null,
+      if (AcousticEchoCanceler.isAvailable()) {
+        AcousticEchoCanceler.create(
+          audio.audioSessionId
+        )
+      } else {
+        null
+      },
       if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(audio.audioSessionId) else null
     ).onEach { it.enabled = true }
     directory.mkdirs()
@@ -88,7 +95,14 @@ internal class VoiceModeMicrophone(
       }
     } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
       // Reported rather than thrown: this thread has no caller to throw to.
-      if (running) onEvent(mapOf("type" to "error", "message" to (error.message ?: "Microphone failed.")))
+      if (running) {
+        onEvent(
+          mapOf(
+            "type" to "error",
+            "message" to (error.message ?: "Microphone failed.")
+          )
+        )
+      }
     }
   }
 
