@@ -18,7 +18,9 @@ import {
   VoiceModeController,
   type VoiceModeState,
   type VoiceModeTarget,
+  watchVoiceModeChimes,
 } from "@t3tools/client-runtime/voice-mode";
+import { playVoiceModeChime } from "./voiceModeChime";
 import { readVoiceModeSettings } from "./voiceModeSettings";
 
 // Resolved by a hook, so the composer publishes it here for the controller to read.
@@ -47,6 +49,34 @@ voiceMode.subscribe(() => {
     toastManager.add({ type: "warning", title: "Voice mode", description: notice });
   }
   reported = { error, notice };
+});
+
+watchVoiceModeChimes(voiceMode, playVoiceModeChime);
+
+// Marked in session storage while voice mode runs. A page that crashed or reloaded mid-call cannot
+// chime, so the page that replaces it in the same window chimes the stop instead.
+const RUNNING_KEY = "t3code:voice-mode-running";
+
+function withSessionStorage(use: (storage: Storage) => void): void {
+  try {
+    use(sessionStorage);
+  } catch {
+    // Storage can be refused; that loses only the chime after a crash.
+  }
+}
+
+withSessionStorage((storage) => {
+  if (storage.getItem(RUNNING_KEY) === null) return;
+  storage.removeItem(RUNNING_KEY);
+  playVoiceModeChime("stop");
+});
+let running = false;
+voiceMode.subscribe(() => {
+  if (running === (voiceMode.state.power !== "off")) return;
+  running = !running;
+  withSessionStorage((storage) =>
+    running ? storage.setItem(RUNNING_KEY, "1") : storage.removeItem(RUNNING_KEY),
+  );
 });
 
 export function toggleVoiceMode(): void {

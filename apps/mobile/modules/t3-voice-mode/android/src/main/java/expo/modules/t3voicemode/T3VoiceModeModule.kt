@@ -1,6 +1,7 @@
 package expo.modules.t3voicemode
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.os.Build
@@ -22,7 +23,11 @@ class T3VoiceModeModule : Module() {
   private var microphone: VoiceModeMicrophone? = null
 
   @Volatile private var voice: VoiceModeVoice? = null
-  private var previousMode: Int? = null
+
+  /** Set while the call's audio route is up; read when a chime is queued. */
+  @Volatile private var previousMode: Int? = null
+  private val chimes = ChimePlayer()
+  private var watchdog: VoiceModeWatchdog.Watch? = null
 
   /** Read and written on the main thread only. */
   private var javaScriptTask: Int? = null
@@ -55,6 +60,22 @@ class T3VoiceModeModule : Module() {
       voice = null
     }
 
+    // Synchronous, so a stop chime is queued before the stopListening that follows it.
+    Function("playChime") { name: String ->
+      val chime = when (name) {
+        "start" -> VoiceModeChime.START
+        "stop" -> VoiceModeChime.STOP
+        else -> throw IllegalArgumentException("There is no \"$name\" chime.")
+      }
+      // On the call's route while it is up, so the echo canceller hears it too.
+      val usage = if (previousMode != null) {
+        AudioAttributes.USAGE_VOICE_COMMUNICATION
+      } else {
+        AudioAttributes.USAGE_MEDIA
+      }
+      chimes.play(chime, usage)
+    }
+
     Function("deleteUtterance") { uri: String ->
       android.net.Uri.parse(uri).path?.let(::File)
         ?.takeIf { it.parentFile?.name == "voice-mode" }
@@ -63,9 +84,13 @@ class T3VoiceModeModule : Module() {
 
     OnDestroy {
       VoiceModeService.onHangUp = null
+      // JavaScript, which chimes every other stop, is going away with this module.
+      val listening = microphone != null
+      if (listening) chimes.play(VoiceModeChime.STOP, AudioAttributes.USAGE_VOICE_COMMUNICATION)
       stopListening()
       voice?.shutDown()
       voice = null
+      chimes.shutDown()
     }
   }
 
@@ -81,7 +106,7 @@ class T3VoiceModeModule : Module() {
     val started = VoiceModeMicrophone(
       File(context.cacheDir, "voice-mode"),
       speechModel = { context.assets.open(SileroVad.ASSET).use { it.readBytes() } },
-      talkingOver = { voice?.speaking == true }
+      talkingOver = { voice?.speaking == true || chimes.playing }
     ) { sendEvent("onSpeech", it) }
     try {
       started.start()
@@ -92,12 +117,15 @@ class T3VoiceModeModule : Module() {
       throw error
     }
     microphone = started
+    watchdog = VoiceModeWatchdog.Watch(context.applicationContext)
     keepJavaScriptRunning()
   }
 
   private fun stopListening() {
     microphone?.stop()
     microphone = null
+    watchdog?.end()
+    watchdog = null
     VoiceModeService.stop(context)
     UiThreadUtil.runOnUiThread {
       javaScriptTask?.let {
@@ -105,6 +133,8 @@ class T3VoiceModeModule : Module() {
       }
       javaScriptTask = null
     }
+    // The stop chime, queued just before, plays on the call's route before it comes down.
+    chimes.awaitQuiet()
     restoreRoute()
   }
 

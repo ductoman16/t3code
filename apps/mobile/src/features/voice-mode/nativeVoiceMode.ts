@@ -1,3 +1,4 @@
+import type { VoiceModeChime } from "@t3tools/client-runtime/voice-mode";
 import { requireOptionalNativeModule } from "expo";
 
 export type NativeSpeechEvent =
@@ -27,6 +28,8 @@ export interface NativeVoiceMode {
   stopSpeaking(): void;
   shutDownVoice(): void;
   deleteUtterance(uri: string): void;
+  /** Queues a chime; call it before stopListening so the stop chime plays on the call's route. */
+  playChime(chime: VoiceModeChime): void;
 }
 
 /** Null where the app was built without voice mode, such as on iOS. */

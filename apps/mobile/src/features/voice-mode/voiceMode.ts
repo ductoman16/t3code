@@ -3,6 +3,7 @@ import {
   createReplyReader,
   VoiceModeController,
   type VoiceModeState,
+  watchVoiceModeChimes,
 } from "@t3tools/client-runtime/voice-mode";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
@@ -66,6 +67,9 @@ function createVoiceMode() {
     },
     settings: () => ({ sendAfterSilenceMs: SEND_AFTER_SILENCE_MS }),
   });
+
+  // Chimes from a state listener, which runs before the controller closes the microphone.
+  watchVoiceModeChimes(controller, (chime) => native.playChime(chime));
 
   let reported: VoiceModeState["error"] = null;
   controller.subscribe(() => {

@@ -8,5 +8,9 @@
       android:name=".VoiceModeService"
       android:exported="false"
       android:foregroundServiceType="microphone" />
+    <service
+      android:name=".VoiceModeWatchdog"
+      android:exported="false"
+      android:process=":voiceWatchdog" />
   </application>
 </manifest>
