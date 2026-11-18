@@ -2,9 +2,7 @@ package expo.modules.t3voicemode
 
 import android.content.Context
 import android.media.AudioAttributes
-import android.media.AudioDeviceInfo
 import android.media.AudioManager
-import android.os.Build
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.ReactContext
 import com.facebook.react.bridge.UiThreadUtil
@@ -24,8 +22,7 @@ class T3VoiceModeModule : Module() {
 
   @Volatile private var voice: VoiceModeVoice? = null
 
-  /** Set while the call's audio route is up; read when a chime is queued. */
-  @Volatile private var previousMode: Int? = null
+  private val route by lazy { CallRoute(audioManager) }
   private val chimes = ChimePlayer()
   private var watchdog: VoiceModeWatchdog.Watch? = null
 
@@ -68,7 +65,7 @@ class T3VoiceModeModule : Module() {
         else -> throw IllegalArgumentException("There is no \"$name\" chime.")
       }
       // On the call's route while it is up, so the echo canceller hears it too.
-      val usage = if (previousMode != null) {
+      val usage = if (route.isUp) {
         AudioAttributes.USAGE_VOICE_COMMUNICATION
       } else {
         AudioAttributes.USAGE_MEDIA
@@ -102,7 +99,7 @@ class T3VoiceModeModule : Module() {
 
   private fun startListening() {
     if (microphone != null) return
-    routeLikeACall()
+    route.bringUp()
     val started = VoiceModeMicrophone(
       File(context.cacheDir, "voice-mode"),
       speechModel = { context.assets.open(SileroVad.ASSET).use { it.readBytes() } },
@@ -113,7 +110,7 @@ class T3VoiceModeModule : Module() {
       VoiceModeService.start(context)
     } catch (@Suppress("TooGenericExceptionCaught") error: Exception) {
       started.stop()
-      restoreRoute()
+      route.tearDown()
       throw error
     }
     microphone = started
@@ -135,7 +132,7 @@ class T3VoiceModeModule : Module() {
     }
     // The stop chime, queued just before, plays on the call's route before it comes down.
     chimes.awaitQuiet()
-    restoreRoute()
+    route.tearDown()
   }
 
   // React Native stops firing JavaScript timers once the app is paused, as it is with the screen
@@ -149,45 +146,7 @@ class T3VoiceModeModule : Module() {
     }
   }
 
-  // Call mode turns on the phone's echo cancellation. It plays through the earpiece by default, so
-  // the loudspeaker is chosen unless a headset is connected.
-  private fun routeLikeACall() {
-    val manager = audioManager
-    if (previousMode == null) previousMode = manager.mode
-    manager.mode = AudioManager.MODE_IN_COMMUNICATION
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      val devices = manager.availableCommunicationDevices
-      if (devices.none { it.type in HEADSET_TYPES }) {
-        devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-          ?.let(manager::setCommunicationDevice)
-      }
-    } else {
-      @Suppress("DEPRECATION")
-      manager.isSpeakerphoneOn = !manager.isWiredHeadsetOn && !manager.isBluetoothScoOn
-    }
-  }
-
-  private fun restoreRoute() {
-    val mode = previousMode ?: return
-    val manager = audioManager
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-      manager.clearCommunicationDevice()
-    } else {
-      @Suppress("DEPRECATION")
-      manager.isSpeakerphoneOn = false
-    }
-    manager.mode = mode
-    previousMode = null
-  }
-
   private companion object {
     const val JAVASCRIPT_TASK = "T3VoiceMode"
-    val HEADSET_TYPES = setOf(
-      AudioDeviceInfo.TYPE_WIRED_HEADSET,
-      AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
-      AudioDeviceInfo.TYPE_BLUETOOTH_SCO,
-      AudioDeviceInfo.TYPE_BLE_HEADSET,
-      AudioDeviceInfo.TYPE_USB_HEADSET
-    )
   }
 }
