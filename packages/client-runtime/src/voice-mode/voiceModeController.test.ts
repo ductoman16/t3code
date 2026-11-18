@@ -8,6 +8,7 @@ import {
   type VoiceModeSpeaker,
   type VoiceModeTarget,
 } from "./voiceModeController.ts";
+import { watchVoiceModeChimes, type VoiceModeChime } from "./voiceModeChime.ts";
 import { withVoiceModeEnded, withVoiceModeInstructions } from "./voiceModeInstructions.ts";
 
 const SEND_AFTER_SILENCE_MS = 800;
@@ -359,6 +360,84 @@ describe("VoiceModeController", () => {
 
       expect(composer.draft).toBe("");
       expect(composer.sent).toEqual([]);
+    });
+  });
+
+  describe("chimes", () => {
+    function listenForChimes(controller: VoiceModeController) {
+      const chimes: VoiceModeChime[] = [];
+      watchVoiceModeChimes(controller, (chime) => chimes.push(chime));
+      return chimes;
+    }
+
+    it("chimes once on coming on and once on being turned off, whatever happens between", async () => {
+      const { controller, microphone, speaker, composer, say } = setUp();
+      const chimes = listenForChimes(controller);
+
+      await controller.turnOn();
+      expect(chimes).toEqual(["start"]);
+      await say("run the tests");
+      composer.reply("m1", "Done.");
+      speaker.finishSpeaking();
+      microphone.handlers?.onSpeechStart();
+      microphone.handlers?.onSpeechCancel();
+      controller.turnOff();
+      controller.turnOff();
+
+      expect(chimes).toEqual(["start", "stop"]);
+    });
+
+    it.each([
+      [
+        "the microphone",
+        (context: Awaited<ReturnType<typeof setUpOn>>) =>
+          context.microphone.handlers?.onError(new Error("device unplugged")),
+      ],
+      [
+        "the voice",
+        (context: Awaited<ReturnType<typeof setUpOn>>) =>
+          context.speaker.breakDown(new Error("GPU device lost")),
+      ],
+    ])("chimes the stop once when %s fails", async (_part, breakDown) => {
+      const context = setUp();
+      const chimes = listenForChimes(context.controller);
+      await context.controller.turnOn();
+
+      breakDown(context);
+      context.microphone.handlers?.onError(new Error("closed"));
+      await settle();
+
+      expect(chimes).toEqual(["start", "stop"]);
+    });
+
+    it("chimes only the stop when voice mode cannot start", async () => {
+      const { controller, microphone } = setUp();
+      const chimes = listenForChimes(controller);
+      microphone.startFailure = new VoiceModeError({ message: "Microphone access was denied." });
+
+      await controller.turnOn();
+
+      expect(chimes).toEqual(["stop"]);
+    });
+
+    it("chimes only the stop when turned off while starting", async () => {
+      const { controller } = setUp();
+      const chimes = listenForChimes(controller);
+
+      const starting = controller.turnOn();
+      controller.turnOff();
+      await starting;
+
+      expect(chimes).toEqual(["stop"]);
+    });
+
+    it("chimes the stop when the user opens another thread", async () => {
+      const { controller } = await setUpOn();
+      const chimes = listenForChimes(controller);
+
+      controller.registerTarget(new StubComposer("thread-2", controller));
+
+      expect(chimes).toEqual(["stop"]);
     });
   });
 
