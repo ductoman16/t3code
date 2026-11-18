@@ -7,7 +7,9 @@ import android.media.AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
 import android.media.AudioDeviceInfo.TYPE_WIRED_HEADPHONES
 import android.media.AudioDeviceInfo.TYPE_WIRED_HEADSET
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class CallRouteTest {
@@ -36,5 +38,14 @@ class CallRouteTest {
   @Test
   fun neverChoosesTheEarpiece() {
     assertNull(CallRoute.preferredType(listOf(TYPE_BUILTIN_EARPIECE)))
+  }
+
+  @Test
+  fun onlyTheLoudspeakerEchoesIntoTheMicrophone() {
+    assertTrue(CallRoute.echoes(TYPE_BUILTIN_SPEAKER))
+    assertTrue(CallRoute.echoes(null))
+    assertFalse(CallRoute.echoes(TYPE_BLUETOOTH_SCO))
+    assertFalse(CallRoute.echoes(TYPE_BLE_HEADSET))
+    assertFalse(CallRoute.echoes(TYPE_WIRED_HEADPHONES))
   }
 }
