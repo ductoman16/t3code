@@ -56,10 +56,13 @@ class SpeechDetectorTest {
   }
 
   @Test
-  fun ignoresNearSilenceHoweverLikelyTheModelThinksItIsSpeech() {
+  fun hearsSpeechTooQuietToMeasureWhenTheModelIsSure() {
     val detector = detector()
+    detector.feed(quiet(1000))
 
-    assertTrue(detector.feed(heard(1000, 0.9f, amplitude = 0.0)).isEmpty())
+    val events = detector.feed(heard(256, 0.9f, amplitude = 0.0) + quiet(700))
+
+    assertTrue(events.last() is SpeechDetector.Event.Utterance)
   }
 
   @Test
