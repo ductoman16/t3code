@@ -15,6 +15,7 @@ import { resolveSpeechVocabulary } from "@t3tools/shared/speech";
 import { getClientSettings } from "../hooks/useSettings";
 import { runEnvironmentSpeech } from "../speech/runEnvironmentSpeech";
 import { bindAudioGrant } from "../speech/voiceConsent";
+import { utterancePcmBytes } from "./utterancePcm";
 import {
   isVoiceModeError,
   VoiceModeError,
@@ -108,7 +109,7 @@ export function createEnvironmentTranscriber(
     async transcribe(audio, signal) {
       const destination = requireDestination();
       const hasConsent = bindAudioGrant(destination.grantId);
-      const pcm = new Uint8Array(audio.buffer, audio.byteOffset, audio.byteLength);
+      const pcm = utterancePcmBytes(audio);
       try {
         const result = await runEnvironmentSpeech(
           destination.cloudProvider
