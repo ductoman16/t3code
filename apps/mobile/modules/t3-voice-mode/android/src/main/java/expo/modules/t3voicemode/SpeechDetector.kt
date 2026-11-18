@@ -32,8 +32,8 @@ internal class SpeechDetector(private val model: SpeechModel) {
     val strict = strictMs > 0
     // The model sees every frame, even ones the level rules out, to keep its state continuous.
     val modelProbability = model.speechProbability(frame)
-    val minLevelDb = if (strict) TALK_OVER_MIN_LEVEL_DB else FLOOR_LIMIT_DB
-    val probability = if (levelDb(frame) < minLevelDb) 0f else modelProbability
+    val probability =
+      if (strict && levelDb(frame) < TALK_OVER_MIN_LEVEL_DB) 0f else modelProbability
     val isSpeech =
       probability >= if (strict) TALK_OVER_SPEECH_THRESHOLD else POSITIVE_SPEECH_THRESHOLD
     frames.add(frame)
@@ -93,9 +93,6 @@ internal class SpeechDetector(private val model: SpeechModel) {
     private const val REDEMPTION_MS = 600
     private const val PRE_SPEECH_PAD_MS = 300
     private const val MAX_UTTERANCE_MS = 30_000
-
-    /** Quieter than this is never speech. */
-    private const val FLOOR_LIMIT_DB = -58.0
 
     // While the agent's voice plays, speech must be this likely, this loud and this long, so the
     // echo the phone's canceller leaves behind is not taken for the user.
