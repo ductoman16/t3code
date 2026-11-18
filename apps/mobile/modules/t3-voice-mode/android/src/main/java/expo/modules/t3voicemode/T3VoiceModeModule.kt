@@ -103,7 +103,8 @@ class T3VoiceModeModule : Module() {
     val started = VoiceModeMicrophone(
       File(context.cacheDir, "voice-mode"),
       speechModel = { context.assets.open(SileroVad.ASSET).use { it.readBytes() } },
-      talkingOver = { voice?.speaking == true || chimes.playing }
+      // Speech is held to the stricter talk-over rules only where the reply can echo into the mic.
+      talkingOver = { (voice?.speaking == true || chimes.playing) && route.echoes }
     ) { sendEvent("onSpeech", it) }
     try {
       started.start()

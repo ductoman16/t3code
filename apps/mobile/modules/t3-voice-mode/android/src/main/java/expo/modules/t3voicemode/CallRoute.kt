@@ -17,7 +17,12 @@ internal class CallRoute(private val manager: AudioManager) {
   @Volatile private var previousMode: Int? = null
   private var watch: AudioDeviceCallback? = null
 
+  @Volatile private var chosenType: Int? = null
+
   val isUp: Boolean get() = previousMode != null
+
+  /** Whether the microphone can hear the call's own audio, as it can from the phone's speakers. */
+  val echoes: Boolean get() = echoes(chosenType)
 
   @Synchronized
   fun bringUp() {
@@ -48,6 +53,7 @@ internal class CallRoute(private val manager: AudioManager) {
     }
     manager.mode = mode
     previousMode = null
+    chosenType = null
   }
 
   @Synchronized
@@ -59,6 +65,7 @@ internal class CallRoute(private val manager: AudioManager) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
       val devices = manager.availableCommunicationDevices
       val type = preferredType(devices.map { it.type }) ?: return
+      chosenType = type
       val device = devices.first { it.type == type }
       if (manager.communicationDevice?.id != device.id) manager.setCommunicationDevice(device)
     } else {
@@ -69,6 +76,7 @@ internal class CallRoute(private val manager: AudioManager) {
   @Suppress("DEPRECATION")
   private fun chooseBeforeS() {
     val type = preferredType(manager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).map { it.type })
+    chosenType = type
     val bluetooth = type == AudioDeviceInfo.TYPE_BLUETOOTH_SCO
     if (bluetooth && !manager.isBluetoothScoOn) {
       manager.startBluetoothSco()
@@ -93,5 +101,8 @@ internal class CallRoute(private val manager: AudioManager) {
 
     /** The device type the call should use, from the types available. */
     fun preferredType(available: List<Int>): Int? = PREFERENCE.firstOrNull { it in available }
+
+    /** Headphones keep the call's audio from the microphone; anything else is taken to echo. */
+    fun echoes(type: Int?): Boolean = type == null || type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
   }
 }
