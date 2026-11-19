@@ -28,6 +28,16 @@ const CORE = 148;
 
 const pulse = (from: object, to: object) => css.keyframes({ from, to });
 
+const THINKING = {
+  rgb: "167, 139, 250",
+  halo: pulse(
+    { opacity: 0.35, transform: [{ scale: 0.94 }] },
+    { opacity: 0.8, transform: [{ scale: 1 }] },
+  ),
+  core: pulse({ opacity: 0.72 }, { opacity: 1 }),
+  ms: 1100,
+};
+
 const LOOKS: Record<
   CallLook,
   {
@@ -61,15 +71,9 @@ const LOOKS: Record<
     core: pulse({ transform: [{ scale: 1.02 }] }, { transform: [{ scale: 1.1 }] }),
     ms: 600,
   },
-  thinking: {
-    rgb: "167, 139, 250",
-    halo: pulse(
-      { opacity: 0.35, transform: [{ scale: 0.94 }] },
-      { opacity: 0.8, transform: [{ scale: 1 }] },
-    ),
-    core: pulse({ opacity: 0.72 }, { opacity: 1 }),
-    ms: 1100,
-  },
+  thinking: THINKING,
+  transcribing: THINKING,
+  sending: THINKING,
   speaking: {
     rgb: "96, 165, 250",
     halo: pulse(
