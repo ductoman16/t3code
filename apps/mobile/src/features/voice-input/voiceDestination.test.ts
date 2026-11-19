@@ -53,7 +53,11 @@ vi.mock("../../state/presentation", () => ({
         connection: { phase: id === "offline" ? "offline" : "connected" },
         serverConfig: {
           environment: {
-            capabilities: { voiceTranscription: true, cloudVoiceTranscription: true },
+            capabilities: {
+              voiceTranscription: true,
+              cloudVoiceTranscription: true,
+              voiceSynthesis: id !== "old-server",
+            },
           },
         },
       });
@@ -132,7 +136,10 @@ it("keeps local as the default and never reuses consent for an offline or resele
     expect(appAtomRegistry.get(voiceRouteAtom)).toBeNull();
     expect(mocks.probe).not.toHaveBeenCalled();
     chooseVoiceDestination(EnvironmentId.make("offline"));
-    expect(appAtomRegistry.get(voiceRouteAtom)).toEqual({ transcriber: null });
+    expect(appAtomRegistry.get(voiceRouteAtom)).toEqual({
+      transcriber: null,
+      synthesizer: "disconnected",
+    });
     const host = EnvironmentId.make("my-server");
     chooseVoiceDestination(host);
     const first = appAtomRegistry.get(voiceRouteAtom)?.transcriber;
@@ -255,6 +262,41 @@ it("a late cloud key save cannot override a newer destination choice", () => {
     expect(appAtomRegistry.get(voiceGrantAtom)).toBe(grant);
     expect(grant?.destination).toEqual({ kind: "cloud", environmentId: host, provider: "xai" });
   } finally {
+    appAtomRegistry.reset();
+  }
+});
+
+it("reads replies on the chosen environment, and names one that cannot", async () => {
+  const unmount = appAtomRegistry.mount(voiceRouteAtom);
+  try {
+    chooseVoiceDestination(EnvironmentId.make("old-server"));
+    expect(appAtomRegistry.get(voiceRouteAtom)?.synthesizer).toBe("unsupported");
+
+    chooseVoiceDestination(EnvironmentId.make("my-server"), "openai");
+    const synthesizer = appAtomRegistry.get(voiceRouteAtom)!.synthesizer;
+    if (typeof synthesizer === "string") throw new Error(`no synthesizer: ${synthesizer}`);
+    const wav = new Uint8Array([82, 73, 70, 70]);
+    mocks.fetch
+      .mockResolvedValueOnce(new Response(null, { status: 204 }))
+      .mockResolvedValueOnce(new Response(wav, { headers: { "content-type": "audio/wav" } }));
+    const signal = new AbortController().signal;
+    await synthesizer.prepare(signal);
+    await expect(synthesizer.speak("Hello there.", 1.1, signal)).resolves.toEqual(wav);
+    const [prepare, speak] = mocks.fetch.mock.calls.slice(-2);
+    expect(new URL(String(prepare![0])).pathname).toBe("/api/voice/speak/prepare");
+    expect(String(speak![0])).toBe("https://my-server.test/api/voice/speak");
+    expect(JSON.parse(String(speak![1]?.body))).toEqual({
+      text: "Hello there.",
+      voice: "af_heart",
+      speed: 1.1,
+    });
+
+    chooseVoiceDestination(null);
+    await expect(synthesizer.speak("Gone.", 1.1, signal)).rejects.toThrow(
+      "Your transcription choice changed.",
+    );
+  } finally {
+    unmount();
     appAtomRegistry.reset();
   }
 });

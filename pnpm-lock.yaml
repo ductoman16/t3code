@@ -358,7 +358,6 @@ overrides:
   '@vercel/routing-utils>path-to-regexp': 6.3.0
   '@vercel/config>zod': 4.6.7
   '@huggingface/transformers': 3.8.1
-  '@huggingface/transformers>onnxruntime-node': '-'
   '@huggingface/transformers>sharp': '-'
 
 packageExtensionsChecksum: sha256-18pwcgTDbqYFYAzCw8OfBYuC2btyq6aJSLhE/gjTJb4=
@@ -373,7 +372,7 @@ patchedDependencies:
   '@effect/vitest@4.1.2': 299510b71c36537a832a67e9d160a5f112a5f326a29e95c41cb45fc8234e47c7
   '@expo/ui@58.0.27': 9f2547678939f4ec78fe45163b6455aad63d3c80353d7e0cc783f6a61a7ccc2f
   '@ff-labs/fff-node@0.11.0': 93f62a76399b435a76588b2bef237db0a1e85880c1ac0d0759c416e9cc579252
-  '@huggingface/transformers@3.8.1': 5b4824a0f2a4b8b8b477a3baf444dd1bb0efed57170e657b9a7fc66cfdc41abd
+  '@huggingface/transformers@3.8.1': 6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7
   '@legendapp/list@3.7.2': 8f361e44c0756d883f8b8b5964f918f37b514a436c5058b773a1dc57eee5bfcc
   '@muse-code/sdk@1.4.6': 7b495b607fc5d76b444c7c4d58821e839726a30e6f3c53564f0d59f2d5b42101
   '@pierre/diffs@1.7.0-beta.4': 241563d810c29250e0e92f3eda74214393726d46667fedbf1f91a5f5bea07d1e
@@ -396,6 +395,7 @@ patchedDependencies:
   micromark-extension-llm-math@3.1.0: 6c191d17ea797a4ac6cc88b901041c5e6c5d4c4e508102a033e3f14e95bd2add
   micromark@4.0.2: cb79edde7eca83bbcaaafb6ceb7b044b81b987314cde4910823b15257ecada67
   node-pty@1.2.0-beta.15: ff8117509663fe1d5a07ef2648c324e80a9349b7d90401a00a591702615b8b30
+  onnxruntime-node@1.21.0: 56278fccb93039abbec85aee56f60a30cc92ccddc7ca360c4fa1fec34912e5a2
   react-native-gesture-handler@3.5.0: 171379dd378f8f11e9187876dec2116e5cbf5f21cef6576cdde6956518324f98
   react-native-image-viewing@0.2.2: 4aa038d541c7ddcc8f1437eb3e7b4f769f61de78e7f91b53f9805dfca608474d
   react-native-keyboard-controller@1.23.0: 1c7c80317ef050e08d4aabe034a0813d03b497dff2dc8b37fb5f4a6e3b20fddb
@@ -867,6 +867,9 @@ importers:
       '@ff-labs/fff-node':
         specifier: 0.11.0
         version: 0.11.0(patch_hash=93f62a76399b435a76588b2bef237db0a1e85880c1ac0d0759c416e9cc579252)
+      '@huggingface/transformers':
+        specifier: 3.8.1
+        version: 3.8.1(patch_hash=6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7)
       '@muse-code/sdk':
         specifier: 1.4.6
         version: 1.4.6(patch_hash=7b495b607fc5d76b444c7c4d58821e839726a30e6f3c53564f0d59f2d5b42101)(@types/node@24.12.4)
@@ -942,6 +945,9 @@ importers:
       ffi-rs:
         specifier: 1.3.2
         version: 1.3.2
+      kokoro-js:
+        specifier: 1.2.1
+        version: 1.2.1
       node-pty:
         specifier: 1.2.0-beta.15
         version: 1.2.0-beta.15(patch_hash=ff8117509663fe1d5a07ef2648c324e80a9349b7d90401a00a591702615b8b30)
@@ -11094,11 +11100,18 @@ packages:
   oniguruma-to-es@4.3.6:
     resolution: {integrity: sha512-csuQ9x3Yr0cEIs/Zgx/OEt9iBw9vqIunAPQkx19R/fiMq2oGVTgcMqO/V3Ybqefr1TBvosI6jU539ksaBULJyA==}
 
+  onnxruntime-common@1.21.0:
+    resolution: {integrity: sha512-Q632iLLrtCAVOTO65dh2+mNbQir/QNTVBG3h/QdZBpns7mZ0RYbLRBgGABPbpU9351AgYy7SJf1WaeVwMrBFPQ==}
+
   onnxruntime-common@1.22.0-dev.20250409-89f8206ba4:
     resolution: {integrity: sha512-vDJMkfCfb0b1A836rgHj+ORuZf4B4+cc2bASQtpeoJLueuFc5DuYwjIZUBrSvx/fO5IrLjLz+oTrB3pcGlhovQ==}
 
   onnxruntime-common@1.31.1:
     resolution: {integrity: sha512-F+nnYNiQtmNJ95V6R/isBJqiVpdANCrsMEg1OaF+Bkbl3GAtzWLR7Ng17Ld0QtYtYJyotOHPJzOQn1Y6PLZjpg==}
+
+  onnxruntime-node@1.21.0:
+    resolution: {integrity: sha512-NeaCX6WW2L8cRCSqy3bInlo5ojjQqu2fD3D+9W5qb5irwxhEyWKXeH2vZ8W9r6VxaMPUan+4/7NDwZMtouZxEw==}
+    os: [win32, darwin, linux]
 
   onnxruntime-web@1.22.0-dev.20250409-89f8206ba4:
     resolution: {integrity: sha512-0uS76OPgH0hWCPrFKlL8kYVV7ckM7t/36HfbgoFw6Nd0CZVVbQC4PkrR8mBX8LtNUFZO25IQBqV2Hx2ho3FlbQ==}
@@ -15425,9 +15438,10 @@ snapshots:
 
   '@huggingface/jinja@0.5.13': {}
 
-  '@huggingface/transformers@3.8.1(patch_hash=5b4824a0f2a4b8b8b477a3baf444dd1bb0efed57170e657b9a7fc66cfdc41abd)':
+  '@huggingface/transformers@3.8.1(patch_hash=6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7)':
     dependencies:
       '@huggingface/jinja': 0.5.13
+      onnxruntime-node: 1.21.0(patch_hash=56278fccb93039abbec85aee56f60a30cc92ccddc7ca360c4fa1fec34912e5a2)
       onnxruntime-web: 1.22.0-dev.20250409-89f8206ba4
 
   '@iarna/toml@2.2.5': {}
@@ -18482,8 +18496,7 @@ snapshots:
 
   boolbase@1.0.0: {}
 
-  boolean@3.2.0:
-    optional: true
+  boolean@3.2.0: {}
 
   bplist-creator@0.1.0:
     dependencies:
@@ -18960,7 +18973,6 @@ snapshots:
       es-define-property: 1.0.1
       es-errors: 1.3.0
       gopd: 1.2.0
-    optional: true
 
   define-lazy-prop@2.0.0: {}
 
@@ -18971,7 +18983,6 @@ snapshots:
       define-data-property: 1.1.4
       has-property-descriptors: 1.0.2
       object-keys: 1.1.1
-    optional: true
 
   defu@6.1.7: {}
 
@@ -18993,8 +19004,7 @@ snapshots:
 
   detect-libc@2.1.2: {}
 
-  detect-node@2.1.0:
-    optional: true
+  detect-node@2.1.0: {}
 
   devalue@5.9.4: {}
 
@@ -19264,8 +19274,7 @@ snapshots:
       has-tostringtag: 1.0.2
       hasown: 2.0.4
 
-  es6-error@4.1.1:
-    optional: true
+  es6-error@4.1.1: {}
 
   es6-promise@3.3.1: {}
 
@@ -20117,13 +20126,11 @@ snapshots:
       roarr: 2.15.4
       semver: 7.7.4
       serialize-error: 7.0.1
-    optional: true
 
   globalthis@1.0.4:
     dependencies:
       define-properties: 1.2.1
       gopd: 1.2.0
-    optional: true
 
   gopd@1.2.0: {}
 
@@ -20260,7 +20267,6 @@ snapshots:
   has-property-descriptors@1.0.2:
     dependencies:
       es-define-property: 1.0.1
-    optional: true
 
   has-symbols@1.1.0: {}
 
@@ -20666,8 +20672,7 @@ snapshots:
 
   json-schema@0.4.0: {}
 
-  json-stringify-safe@5.0.1:
-    optional: true
+  json-stringify-safe@5.0.1: {}
 
   json5@2.2.3: {}
 
@@ -20757,7 +20762,7 @@ snapshots:
 
   kokoro-js@1.2.1:
     dependencies:
-      '@huggingface/transformers': 3.8.1(patch_hash=5b4824a0f2a4b8b8b477a3baf444dd1bb0efed57170e657b9a7fc66cfdc41abd)
+      '@huggingface/transformers': 3.8.1(patch_hash=6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7)
       phonemizer: 1.2.1
 
   lan-network@0.2.1: {}
@@ -20918,7 +20923,6 @@ snapshots:
   matcher@3.0.0:
     dependencies:
       escape-string-regexp: 4.0.0
-    optional: true
 
   math-intrinsics@1.1.0: {}
 
@@ -21842,8 +21846,7 @@ snapshots:
 
   object-inspect@1.13.4: {}
 
-  object-keys@1.1.1:
-    optional: true
+  object-keys@1.1.1: {}
 
   obug@3.0.0: {}
 
@@ -21891,9 +21894,17 @@ snapshots:
       regex: 6.1.0
       regex-recursion: 6.0.2
 
+  onnxruntime-common@1.21.0: {}
+
   onnxruntime-common@1.22.0-dev.20250409-89f8206ba4: {}
 
   onnxruntime-common@1.31.1: {}
+
+  onnxruntime-node@1.21.0(patch_hash=56278fccb93039abbec85aee56f60a30cc92ccddc7ca360c4fa1fec34912e5a2):
+    dependencies:
+      global-agent: 3.0.0
+      onnxruntime-common: 1.21.0
+      tar: 7.5.22
 
   onnxruntime-web@1.22.0-dev.20250409-89f8206ba4:
     dependencies:
@@ -23016,7 +23027,6 @@ snapshots:
       json-stringify-safe: 5.0.1
       semver-compare: 1.0.0
       sprintf-js: 1.1.3
-    optional: true
 
   rolldown@1.0.0-rc.17:
     dependencies:
@@ -23127,8 +23137,7 @@ snapshots:
 
   secure-json-parse@4.1.1: {}
 
-  semver-compare@1.0.0:
-    optional: true
+  semver-compare@1.0.0: {}
 
   semver@5.7.2: {}
 
@@ -23177,7 +23186,6 @@ snapshots:
   serialize-error@7.0.1:
     dependencies:
       type-fest: 0.13.1
-    optional: true
 
   seroval-plugins@1.7.8(seroval@1.7.10):
     dependencies:
@@ -23372,8 +23380,7 @@ snapshots:
     dependencies:
       through: 2.3.8
 
-  sprintf-js@1.1.3:
-    optional: true
+  sprintf-js@1.1.3: {}
 
   sql.js@1.15.0: {}
 
@@ -23669,8 +23676,7 @@ snapshots:
 
   tslib@2.8.1: {}
 
-  type-fest@0.13.1:
-    optional: true
+  type-fest@0.13.1: {}
 
   type-fest@0.21.3: {}
 

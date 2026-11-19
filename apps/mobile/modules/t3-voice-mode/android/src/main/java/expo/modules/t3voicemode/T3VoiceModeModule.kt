@@ -11,16 +11,20 @@ import com.facebook.react.jstasks.HeadlessJsTaskContext
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import expo.modules.kotlin.typedarray.Uint8Array
 import java.io.File
 
 /**
  * Voice mode's audio on Android: a call-style audio route, a microphone that finds utterances, and a
- * voice that reads replies. Everything else, from transcription to what is said, lives in JavaScript.
+ * voice that reads replies, or a player for replies read aloud elsewhere. Everything else, from
+ * transcription to what is said, lives in JavaScript.
  */
 class T3VoiceModeModule : Module() {
   private var microphone: VoiceModeMicrophone? = null
 
   @Volatile private var voice: VoiceModeVoice? = null
+
+  @Volatile private var player: VoiceModePlayer? = null
 
   private val route by lazy { CallRoute(audioManager) }
   private val chimes = ChimePlayer()
@@ -50,12 +54,22 @@ class T3VoiceModeModule : Module() {
       checkNotNull(voice) { "The voice is not ready." }.say(id, text, rate)
     }
 
-    Function("stopSpeaking") { voice?.stop() }
-
-    Function("shutDownVoice") {
-      voice?.shutDown()
-      voice = null
+    Function("preparePlayer") {
+      if (player == null) player = VoiceModePlayer { sendEvent("onVoice", it) }
     }
+
+    Function("play") { id: String, wav: Uint8Array ->
+      val bytes = ByteArray(wav.byteLength)
+      wav.read(bytes, 0, wav.byteLength)
+      checkNotNull(player) { "The voice is not ready." }.play(id, bytes)
+    }
+
+    Function("stopSpeaking") {
+      voice?.stop()
+      player?.stop()
+    }
+
+    Function("shutDownVoice") { shutDownVoice() }
 
     // Synchronous, so a stop chime is queued before the stopListening that follows it.
     Function("playChime") { name: String ->
@@ -86,10 +100,16 @@ class T3VoiceModeModule : Module() {
       val listening = microphone != null
       if (listening) chimes.play(VoiceModeChime.STOP, AudioAttributes.USAGE_VOICE_COMMUNICATION)
       stopListening()
-      voice?.shutDown()
-      voice = null
+      shutDownVoice()
       chimes.shutDown()
     }
+  }
+
+  private fun shutDownVoice() {
+    voice?.shutDown()
+    voice = null
+    player?.shutDown()
+    player = null
   }
 
   private suspend fun prepareVoice() {
@@ -105,7 +125,9 @@ class T3VoiceModeModule : Module() {
       File(context.cacheDir, "voice-mode"),
       speechModel = { context.assets.open(SileroVad.ASSET).use { it.readBytes() } },
       // Speech is held to the stricter talk-over rules only where the reply can echo into the mic.
-      talkingOver = { (voice?.speaking == true || chimes.playing) && route.echoes }
+      talkingOver = {
+        (voice?.speaking == true || player?.speaking == true || chimes.playing) && route.echoes
+      }
     ) { sendEvent("onSpeech", it) }
     try {
       started.start()

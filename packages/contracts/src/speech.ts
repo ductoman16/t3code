@@ -265,6 +265,19 @@ export type EnvironmentSpeechStatus = typeof EnvironmentSpeechStatus.Type;
 
 export const EnvironmentSpeechTranscriptionResult = Schema.Struct({ text: Schema.String });
 
+/** The Kokoro voice and pace a reply is read in; the defaults are the desktop app's. */
+export const SPEECH_SYNTHESIS_DEFAULT_VOICE = "af_heart";
+export const SPEECH_SYNTHESIS_DEFAULT_SPEED = 1.1;
+
+/** One sentence of a reply, read aloud on the environment as 16-bit mono WAV. */
+export const EnvironmentSpeechSynthesisRequest = Schema.Struct({
+  text: TrimmedNonEmptyString.check(Schema.isMaxLength(2_000)),
+  /** A Kokoro voice id; the first letter is its language, the second its gender. */
+  voice: Schema.String.check(Schema.isPattern(/^[a-z]{2}_[a-z]+$/)),
+  speed: Schema.Finite.check(Schema.isBetween({ minimum: 0.5, maximum: 2 })),
+});
+export type EnvironmentSpeechSynthesisRequest = typeof EnvironmentSpeechSynthesisRequest.Type;
+
 export const EnvironmentSpeechAccelerationRequest = Schema.Struct({
   acceleration: SpeechAcceleration,
 });

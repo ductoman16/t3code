@@ -4,6 +4,7 @@ import {
   type CloudSpeechProvider,
   type EnvironmentId,
   DEFAULT_SPEECH_TRANSCRIPTION_OPTIONS,
+  SPEECH_SYNTHESIS_DEFAULT_VOICE,
   type VoiceTranscriptionDestination,
 } from "@t3tools/contracts";
 import {
@@ -13,6 +14,8 @@ import {
   requireCloudSpeechKey,
   transcribeCloudPcm,
   getEnvironmentSpeechStatus,
+  prepareEnvironmentSpeechSynthesis,
+  synthesizeEnvironmentSpeech,
   transcribeEnvironmentPcm,
   VoiceTranscriptionError,
 } from "@t3tools/client-runtime/voice-input";
@@ -30,6 +33,7 @@ import { environmentPresentations } from "../../state/presentation";
 import { environmentSession, sessionHasScope } from "../../state/session";
 import { connectionAtomRuntime } from "../../connection/runtime";
 import { uuidv4 } from "../../lib/uuid";
+import type { EnvironmentSynthesizer } from "../voice-mode/environmentVoice";
 import { createEnvironmentTranscriber } from "./environmentTranscriber";
 import { readVoiceGrant, writeVoiceGrant, type VoiceGrant } from "./voiceGrantStorage";
 
@@ -201,6 +205,53 @@ function environmentTranscriber(
   });
 }
 
+/** The environment that reads voice mode's replies aloud, or why it cannot. */
+const synthesisConnectionAtom = Atom.family((id: EnvironmentId) =>
+  Atom.make((get): PreparedConnection | "disconnected" | "unsupported" => {
+    const environment = get(environmentPresentations.presentationAtom(id));
+    if (
+      environment?.connection.phase !== "connected" ||
+      !sessionHasScope(get(environmentSession.sessionStateAtom(id)), AuthOrchestrationOperateScope)
+    )
+      return "disconnected";
+    if (!environment.serverConfig?.environment.capabilities.voiceSynthesis) return "unsupported";
+    return (
+      Option.getOrNull(get(environmentSession.preparedConnectionValueAtom(id))) ?? "disconnected"
+    );
+  }),
+);
+
+function environmentSynthesizer(
+  prepared: PreparedConnection,
+  canSend: () => boolean,
+): EnvironmentSynthesizer {
+  const check = () => {
+    if (!canSend())
+      throw new VoiceTranscriptionError({
+        code: "cancelled",
+        message: "Your transcription choice changed.",
+      });
+  };
+  return {
+    prepare: async (signal) => {
+      check();
+      await runSpeech(prepareEnvironmentSpeechSynthesis(prepared, canSend), signal, canSend);
+    },
+    speak: async (text, speed, signal) => {
+      check();
+      return await runSpeech(
+        synthesizeEnvironmentSpeech(
+          prepared,
+          { text, voice: SPEECH_SYNTHESIS_DEFAULT_VOICE, speed },
+          canSend,
+        ),
+        signal,
+        canSend,
+      );
+    },
+  };
+}
+
 const speechAtom = <A, E>(
   id: EnvironmentId,
   read: (prepared: PreparedConnection) => Effect.Effect<A, E, HttpClient.HttpClient>,
@@ -239,7 +290,7 @@ export const voiceSpeechBenchmarksAtom = Atom.family((id: EnvironmentId) =>
   speechAtom(id, (prepared) => getEnvironmentSpeechModels(prepared, true)),
 );
 
-// null selects on-device; a grant with no usable transcriber must never fall back.
+// null selects on-device; a grant with no usable transcriber or voice must never fall back.
 export const voiceRouteAtom = Atom.make((get) => {
   const grant = get(voiceGrantAtom);
   if (!grant) return null;
@@ -248,6 +299,8 @@ export const voiceRouteAtom = Atom.make((get) => {
     grant.destination.environmentId,
   );
   const connection = get(connectionAtom);
+  const synthesisAtom = synthesisConnectionAtom(grant.destination.environmentId);
+  const synthesis = get(synthesisAtom);
   const registry = get.registry;
   return {
     transcriber:
@@ -257,5 +310,13 @@ export const voiceRouteAtom = Atom.make((get) => {
         () => registry.get(voiceGrantAtom) === grant && registry.get(connectionAtom) === connection,
         cloud,
       ),
+    synthesizer:
+      typeof synthesis === "string"
+        ? synthesis
+        : environmentSynthesizer(
+            synthesis,
+            () =>
+              registry.get(voiceGrantAtom) === grant && registry.get(synthesisAtom) === synthesis,
+          ),
   };
 });

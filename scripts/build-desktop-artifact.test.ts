@@ -743,10 +743,12 @@ it.layer(NodeServices.layer)("build-desktop-artifact", (it) => {
     const x64 = [
       "node_modules/node-pty/prebuilds/darwin-x64/pty.node",
       "node_modules/objc-js/prebuilds/darwin-x64/node.napi.node",
+      "node_modules/onnxruntime-node/bin/napi-v3/darwin/x64/onnxruntime_binding.node",
     ];
     const arm64 = [
       "node_modules/node-pty/prebuilds/darwin-arm64/pty.node",
       "node_modules/objc-js/prebuilds/darwin-arm64/node.napi.armv8.node",
+      "node_modules/onnxruntime-node/bin/napi-v3/darwin/arm64/onnxruntime_binding.node",
     ];
 
     for (const file of x64) {

@@ -10,6 +10,11 @@ const CLI_RUNTIME_EXTERNAL_PREFIXES = [
   "@yuuang/",
   "@ff-labs/",
   "transcribe-cpp",
+  // Kokoro reads its voices beside its own files; the ONNX runtime loads native binaries.
+  "kokoro-js",
+  "@huggingface/",
+  "onnxruntime-",
+  "@protobufjs/",
   "@transcribe-cpp/",
   "koffi",
   "@koromix/",
@@ -34,10 +39,24 @@ const CURSOR_RUNTIME_DEPENDENCIES = [
   "@fastify/busboy",
 ] as const;
 
+// The rest of Kokoro's dependency closure, which loads beside it from node_modules.
+const KOKORO_RUNTIME_DEPENDENCIES = [
+  "phonemizer",
+  "flatbuffers",
+  "guid-typescript",
+  "long",
+  "platform",
+  "protobufjs",
+  "@types/node",
+  "undici-types",
+] as const;
+
 export function isRuntimeExternalCliDependency(id: string): boolean {
   return (
     CLI_RUNTIME_EXTERNAL_PREFIXES.some((prefix) => id.startsWith(prefix)) ||
-    CURSOR_RUNTIME_DEPENDENCIES.some((name) => id === name || id.startsWith(`${name}/`))
+    [...CURSOR_RUNTIME_DEPENDENCIES, ...KOKORO_RUNTIME_DEPENDENCIES].some(
+      (name) => id === name || id.startsWith(`${name}/`),
+    )
   );
 }
 

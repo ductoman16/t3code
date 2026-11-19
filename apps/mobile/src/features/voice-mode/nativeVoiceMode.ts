@@ -6,10 +6,10 @@ export type NativeSpeechEvent =
   | { readonly type: "utterance"; readonly uri: string }
   | { readonly type: "error"; readonly message: string };
 
-export interface NativeVoiceEvent {
-  readonly type: "start" | "done";
-  readonly id: string;
-}
+export type NativeVoiceEvent =
+  | { readonly type: "start" | "done"; readonly id: string }
+  /** The player broke and has stopped. */
+  | { readonly type: "error"; readonly message: string };
 
 /** The Android module in modules/t3-voice-mode. */
 interface Subscription {
@@ -25,6 +25,11 @@ export interface NativeVoiceMode {
   stopListening(): Promise<void>;
   prepareVoice(): Promise<void>;
   say(id: string, text: string, rate: number): void;
+  /** Opens the player that plays audio made elsewhere on the call's route. */
+  preparePlayer(): void;
+  /** Plays a 16-bit mono WAV file after the audio already given; reported like `say`. */
+  play(id: string, wav: Uint8Array): void;
+  /** Silences both the text-to-speech voice and the player. */
   stopSpeaking(): void;
   shutDownVoice(): void;
   deleteUtterance(uri: string): void;
