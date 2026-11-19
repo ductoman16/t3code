@@ -19,6 +19,8 @@ export interface VoiceModeState {
   readonly error: string | null;
   /** Something that went wrong with one phrase while voice mode kept running. */
   readonly notice: string | null;
+  /** How many messages voice mode has sent since it came on. */
+  readonly sent: number;
 }
 
 /** A failure whose message is written for the person using voice mode. */
@@ -134,6 +136,7 @@ const OFF: VoiceModeState = {
   downloading: null,
   error: null,
   notice: null,
+  sent: 0,
 };
 
 const NO_COMPOSER_NOTICE = "No message box was showing, so that phrase was dropped.";
@@ -491,6 +494,7 @@ export class VoiceModeController<Audio = Float32Array> {
     if (!target || target.key !== spoken.key || target.readDraft() !== spoken.text) return;
     if (target.submit()) {
       this.awaitingReply = true;
+      this.setState({ ...this.current, sent: this.current.sent + 1 });
       return;
     }
     this.setState({ ...this.current, notice: SEND_REFUSED_NOTICE });
@@ -555,7 +559,8 @@ export class VoiceModeController<Audio = Float32Array> {
       previous.activity === next.activity &&
       previous.downloading === next.downloading &&
       previous.error === next.error &&
-      previous.notice === next.notice
+      previous.notice === next.notice &&
+      previous.sent === next.sent
     ) {
       return;
     }

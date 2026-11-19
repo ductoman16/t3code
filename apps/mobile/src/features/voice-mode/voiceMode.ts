@@ -104,6 +104,7 @@ const OFF_STATE: VoiceModeState = {
   downloading: null,
   error: null,
   notice: null,
+  sent: 0,
 };
 
 export function useVoiceModeState(): VoiceModeState {

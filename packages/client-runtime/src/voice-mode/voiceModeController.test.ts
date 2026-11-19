@@ -410,6 +410,22 @@ describe("VoiceModeController", () => {
       expect(chimes).toEqual(["start", "stop"]);
     });
 
+    it("chimes once for each message it sends, and not for one the user edited first", async () => {
+      const { controller, composer, clock, say } = setUp();
+      const chimes = listenForChimes(controller);
+      await controller.turnOn();
+
+      await say("run the tests");
+      clock.advance(SEND_AFTER_SILENCE_MS);
+      await say("and fix what fails");
+      clock.advance(SEND_AFTER_SILENCE_MS);
+      await say("then commit");
+      composer.draft = "then commit it all";
+      clock.advance(SEND_AFTER_SILENCE_MS);
+
+      expect(chimes).toEqual(["start", "sent", "sent"]);
+    });
+
     it("chimes only the stop when voice mode cannot start", async () => {
       const { controller, microphone } = setUp();
       const chimes = listenForChimes(controller);

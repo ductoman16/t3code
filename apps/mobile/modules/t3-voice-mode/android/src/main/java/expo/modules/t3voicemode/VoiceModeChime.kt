@@ -11,11 +11,13 @@ import kotlin.math.PI
 import kotlin.math.sin
 
 /**
- * The chimes heard when voice mode comes on and when it goes off: two short sine notes, rising to
- * start and falling to stop. The web client plays the same notes (VOICE_MODE_CHIME in client-runtime).
+ * The chimes heard when voice mode comes on, sends a message, and goes off: short sine notes, two
+ * rising to start, one high blip when a message is sent, and two falling to stop. The web client
+ * plays the same notes (VOICE_MODE_CHIME in client-runtime).
  */
 internal enum class VoiceModeChime(private vararg val notesHz: Double) {
   START(660.0, 880.0),
+  SENT(1320.0),
   STOP(880.0, 660.0);
 
   fun pcm(sampleRate: Int = SAMPLE_RATE): ShortArray {
