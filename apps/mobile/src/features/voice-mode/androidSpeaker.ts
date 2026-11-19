@@ -82,9 +82,10 @@ export function createAndroidSpeaker(
       if (!wasActive) notify();
     },
     pause() {
-      if (paused || queue.length === 0) return;
+      if (paused) return;
+      // Held even with nothing queued, so a reply that arrives while the user talks waits for them.
       paused = true;
-      native.stopSpeaking();
+      if (queue.length > 0) native.stopSpeaking();
     },
     resume() {
       if (!paused) return;
