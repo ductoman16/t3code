@@ -17,8 +17,8 @@ describe("callLook", () => {
     [on("listening"), false, "listening"],
     [on("listening"), true, "thinking"],
     [on("hearing"), true, "hearing"],
-    [on("transcribing"), false, "thinking"],
-    [on("sending"), false, "thinking"],
+    [on("transcribing"), true, "transcribing"],
+    [on("sending"), true, "sending"],
     [on("speaking"), true, "speaking"],
     [{ ...on("listening"), power: "starting" }, false, "connecting"],
   ] as const)("%o with a running turn %s looks %s", (state, turnRunning, look) => {
