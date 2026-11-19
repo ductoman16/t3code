@@ -372,7 +372,7 @@ patchedDependencies:
   '@effect/vitest@4.1.2': 299510b71c36537a832a67e9d160a5f112a5f326a29e95c41cb45fc8234e47c7
   '@expo/ui@58.0.27': 9f2547678939f4ec78fe45163b6455aad63d3c80353d7e0cc783f6a61a7ccc2f
   '@ff-labs/fff-node@0.11.0': 93f62a76399b435a76588b2bef237db0a1e85880c1ac0d0759c416e9cc579252
-  '@huggingface/transformers@3.8.1': 6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7
+  '@huggingface/transformers@3.8.1': b42e4602d1cdbf0bdd063d0dad04cae664a70f687b041c658b015c7f1bd7c989
   '@muse-code/sdk@1.4.6': 7b495b607fc5d76b444c7c4d58821e839726a30e6f3c53564f0d59f2d5b42101
   '@pierre/diffs@1.7.0-beta.4': b24b206d14c79de95be10322b96490b82e41cc13c8a02c7378aaf8e03623431b
   '@react-native-ai/apple@0.12.0': 2d09870c2848d185cb05b53ed823a46e12dba519324d8dd8e584e28731990f9d
@@ -877,7 +877,7 @@ importers:
         version: 0.11.0(patch_hash=93f62a76399b435a76588b2bef237db0a1e85880c1ac0d0759c416e9cc579252)
       '@huggingface/transformers':
         specifier: 3.8.1
-        version: 3.8.1(patch_hash=6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7)
+        version: 3.8.1(patch_hash=b42e4602d1cdbf0bdd063d0dad04cae664a70f687b041c658b015c7f1bd7c989)
       '@muse-code/sdk':
         specifier: 1.4.6
         version: 1.4.6(patch_hash=7b495b607fc5d76b444c7c4d58821e839726a30e6f3c53564f0d59f2d5b42101)(@types/node@24.12.4)
@@ -15495,7 +15495,7 @@ snapshots:
 
   '@huggingface/jinja@0.5.13': {}
 
-  '@huggingface/transformers@3.8.1(patch_hash=6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7)':
+  '@huggingface/transformers@3.8.1(patch_hash=b42e4602d1cdbf0bdd063d0dad04cae664a70f687b041c658b015c7f1bd7c989)':
     dependencies:
       '@huggingface/jinja': 0.5.13
       onnxruntime-node: 1.21.0(patch_hash=56278fccb93039abbec85aee56f60a30cc92ccddc7ca360c4fa1fec34912e5a2)
@@ -20819,7 +20819,7 @@ snapshots:
 
   kokoro-js@1.2.1:
     dependencies:
-      '@huggingface/transformers': 3.8.1(patch_hash=6ae3f85c0d38345760c92ab32f05b013136169ff3b0c74aad0ee81e9029d96c7)
+      '@huggingface/transformers': 3.8.1(patch_hash=b42e4602d1cdbf0bdd063d0dad04cae664a70f687b041c658b015c7f1bd7c989)
       phonemizer: 1.2.1
 
   lan-network@0.2.1: {}

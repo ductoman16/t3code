@@ -1,5 +1,30 @@
+diff --git a/dist/transformers.node.mjs b/dist/transformers.node.mjs
+index e39f187b18f77540817f465fa3f0044231955bf0..f2c6c59dad9d1e762de4f5929605bb5bd5c1c788 100644
+--- a/dist/transformers.node.mjs
++++ b/dist/transformers.node.mjs
+@@ -3,7 +3,8 @@ import * as __WEBPACK_EXTERNAL_MODULE_node_path_02319fef__ from "node:path";
+ import * as __WEBPACK_EXTERNAL_MODULE_node_url_da953c0c__ from "node:url";
+ import * as __WEBPACK_EXTERNAL_MODULE_onnxruntime_common_82b39e9f__ from "onnxruntime-common";
+ import * as __WEBPACK_EXTERNAL_MODULE_onnxruntime_node_6a60201e__ from "onnxruntime-node";
+-import * as __WEBPACK_EXTERNAL_MODULE_sharp__ from "sharp";
++// T3 Code: sharp is not installed; only image models need it.
++const __WEBPACK_EXTERNAL_MODULE_sharp__ = {};
+ /******/ var __webpack_modules__ = ({
+ 
+ /***/ "node:fs":
+@@ -33162,7 +33163,9 @@ if (IS_BROWSER_OR_WEBWORKER) {
+     }
+ 
+ } else {
+-    throw new Error('Unable to load image processing library.');
++    loadImageFunction = async () => {
++        throw new Error('Unable to load image processing library.');
++    };
+ }
+ 
+ 
 diff --git a/package.json b/package.json
-index 95121ec15b21d0e6b3a1f633460708c082471780..36e219adee5be9b7baa8560f324d5b6f132f20f3 100644
+index 95121ec15b21d0e6b3a1f633460708c082471780..467660bf761af72bf3fc136cdb635c38cb6f941a 100644
 --- a/package.json
 +++ b/package.json
 @@ -57,8 +57,7 @@
