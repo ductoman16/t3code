@@ -1009,11 +1009,14 @@ export const DESKTOP_FILE_EXCLUSIONS = [
 export const MAC_FILE_EXCLUSIONS = [
   "!**/node_modules/node-pty/prebuilds/win32-*/**/*",
   "!**/node_modules/node-pty/third_party/conpty/**/*",
+  "!**/node_modules/onnxruntime-node/bin/napi-v3/{linux,win32}/**/*",
 ] as const;
 // Linux builds node-pty from source; its prebuilds target other platforms.
 export const LINUX_FILE_EXCLUSIONS = [
-  ...MAC_FILE_EXCLUSIONS,
+  "!**/node_modules/node-pty/prebuilds/win32-*/**/*",
+  "!**/node_modules/node-pty/third_party/conpty/**/*",
   "!**/node_modules/node-pty/prebuilds/darwin-*/**/*",
+  "!**/node_modules/onnxruntime-node/bin/napi-v3/{darwin,win32}/**/*",
 ] as const;
 
 // Native packages (node-pty, objc-js) ship prebuilds for both Darwin architectures; only universal
@@ -1024,7 +1027,11 @@ export function resolveMacFileExclusions(arch?: typeof BuildArch.Type) {
   }
 
   const unusedArch = arch === "arm64" ? "x64" : "arm64";
-  return [...MAC_FILE_EXCLUSIONS, `!**/node_modules/**/prebuilds/darwin-${unusedArch}/**/*`];
+  return [
+    ...MAC_FILE_EXCLUSIONS,
+    `!**/node_modules/**/prebuilds/darwin-${unusedArch}/**/*`,
+    `!**/node_modules/onnxruntime-node/bin/napi-v3/darwin/${unusedArch}/**/*`,
+  ];
 }
 // Large ASAR sidecars avoid NSIS extracting thousands of loose files during installs and updates.
 export const WINDOWS_SERVER_ASAR_RESOURCE = "server.asar";
@@ -2808,7 +2815,13 @@ export const createBuildConfig = Effect.fn("createBuildConfig")(function* (
     // Disable smart unpack so native packages' JS/metadata stay archived and avoid slowing NSIS with loose files.
     ...(platform === "win"
       ? { asar: { smartUnpack: false }, asarUnpack: [WINDOWS_NATIVE_ASAR_UNPACK_GLOB] }
-      : { asarUnpack: ["**/node_modules/@transcribe-cpp/**/*.{dylib,so,so.*}"] }),
+      : {
+          asarUnpack: [
+            "**/node_modules/@transcribe-cpp/**/*.{dylib,so,so.*}",
+            // The binding loads the runtime library beside it, so both need real paths.
+            "**/node_modules/onnxruntime-node/bin/**/*",
+          ],
+        }),
     extraResources: [
       ...DESKTOP_EXTRA_RESOURCES,
       ...(platform === "linux" ? LINUX_CAPTURE_EXTRA_RESOURCES : []),

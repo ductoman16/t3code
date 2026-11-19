@@ -26,6 +26,7 @@ import {
 import * as SpeechPostProcessing from "./postProcessing.ts";
 import * as CloudSpeech from "./CloudSpeech.ts";
 import * as SpeechService from "./SpeechService.ts";
+import * as SpeechSynthesis from "./SpeechSynthesis.ts";
 
 const MAX_TRANSCRIBE_BODY_BYTES = SpeechService.MAX_SPEECH_BYTES + SPEECH_MAX_OPTIONS_BYTES + 4;
 const parseAudio = Option.liftThrowable(decodeSpeechPcmRequest);
@@ -56,6 +57,17 @@ const mapSpeechError = <A, R>(effect: Effect.Effect<A, SpeechService.SpeechError
     }),
   );
 
+const mapSynthesisError = <A, R>(
+  effect: Effect.Effect<A, SpeechSynthesis.SpeechSynthesisError, R>,
+) =>
+  effect.pipe(
+    Effect.catchTags({
+      SpeechUnsupportedPlatformError: () => failEnvironmentInvalidRequest("speech_unavailable"),
+      SpeechUnknownVoiceError: () => failEnvironmentInvalidRequest("invalid_command"),
+      SpeechOperationError: (error) => failEnvironmentInternal("internal_error", error),
+    }),
+  );
+
 // A linked model's origin is a path on this machine; only filesystem readers may see it.
 // Untraced: it runs inside each handler's own span.
 const withoutHostPaths = Effect.fnUntraced(function* <Fields extends EnvironmentSpeechModels>({
@@ -76,6 +88,7 @@ export const speechHttpApiLayer = HttpApiBuilder.group(
   "voice",
   Effect.fnUntraced(function* (handlers) {
     const speech = yield* SpeechService.SpeechService;
+    const synthesis = yield* SpeechSynthesis.SpeechSynthesis;
     const cloud = yield* CloudSpeech.CloudSpeech;
     const postProcessing = yield* SpeechPostProcessing.SpeechPostProcessing;
     const guard = Effect.fnUntraced(function* (
@@ -225,6 +238,20 @@ export const speechHttpApiLayer = HttpApiBuilder.group(
             .transcribe(decoded.value.pcm, decoded.value.options)
             .pipe(mapSpeechError);
           return { text };
+        }),
+      )
+      .handle(
+        "prepareSynthesis",
+        Effect.fn("environment.voice.prepareSynthesis")(function* (args) {
+          yield* guard(args.endpoint.name);
+          yield* synthesis.prepare.pipe(mapSynthesisError);
+        }),
+      )
+      .handle(
+        "speak",
+        Effect.fn("environment.voice.speak")(function* (args) {
+          yield* guard(args.endpoint.name);
+          return yield* synthesis.speak(args.payload).pipe(mapSynthesisError);
         }),
       )
       .handle(

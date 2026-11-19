@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { createAndroidSpeaker } from "./androidSpeaker";
+import { androidVoice, createAndroidSpeaker } from "./androidSpeaker";
 import type { NativeVoiceEvent } from "./nativeVoiceMode";
 
 function setUp() {
@@ -22,10 +22,10 @@ function setUp() {
   };
   const speaker = createAndroidSpeaker(
     native as unknown as Parameters<typeof createAndroidSpeaker>[0],
-    () => 1.2,
+    () => androidVoice(native, () => 1.2),
     () => time,
   );
-  const voice = (type: NativeVoiceEvent["type"], id: string) => onVoice?.({ type, id });
+  const voice = (type: "start" | "done", id: string) => onVoice?.({ type, id });
   return {
     speaker,
     said,

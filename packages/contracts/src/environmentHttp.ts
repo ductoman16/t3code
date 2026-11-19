@@ -68,6 +68,7 @@ import {
   EnvironmentSpeechPostProcessingRequest,
   EnvironmentSpeechPostProcessingResult,
   EnvironmentSpeechStatus,
+  EnvironmentSpeechSynthesisRequest,
   EnvironmentSpeechTranscriptionResult,
 } from "./speech.ts";
 import { SecretReference } from "./secretReference.ts";
@@ -973,6 +974,21 @@ export class EnvironmentVoiceHttpApi extends HttpApiGroup.make("voice")
     })
       .middleware(EnvironmentVoiceBodyLimit)
       .middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("prepareSynthesis", "/api/voice/speak/prepare", {
+      headers: OptionalBearerHeaders,
+      success: HttpApiSchema.NoContent,
+      error: [...EnvironmentScopedOperationErrors, EnvironmentRequestInvalidError],
+    }).middleware(EnvironmentAuthenticatedAuth),
+  )
+  .add(
+    HttpApiEndpoint.post("speak", "/api/voice/speak", {
+      headers: OptionalBearerHeaders,
+      payload: EnvironmentSpeechSynthesisRequest,
+      success: Schema.Uint8Array.pipe(HttpApiSchema.asUint8Array({ contentType: "audio/wav" })),
+      error: [...EnvironmentScopedOperationErrors, EnvironmentRequestInvalidError],
+    }).middleware(EnvironmentAuthenticatedAuth),
   )
   .add(
     HttpApiEndpoint.post("postProcess", "/api/voice/post-process", {

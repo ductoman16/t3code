@@ -23,6 +23,8 @@ allowBuilds:
   node-pty: true
   # Ships N-API prebuilds; its install script only rebuilds from source.
   objc-js: false
+  # Bundles CPU binaries for every platform; its install script only downloads CUDA ones.
+  onnxruntime-node: false
   # Reached through voice mode's ONNX runtime; its install script only prints a version notice.
   protobufjs: false
   "react-native-enriched-markdown@file:apps/mobile/deps/react-native-enriched-markdown-1.2.0-t3.18-16db4c75.tgz": true
@@ -217,10 +219,9 @@ overrides:
   # zod 3 has a high advisory (GHSA-mrhx-c7xc-m3w5) fixed only in 4.6.6. @vercel/config only
   # builds a z.object of z.string().regex() and calls parse, which zod 4 keeps unchanged.
   "@vercel/config>zod": 4.6.7
-  # Voice mode runs Kokoro in the browser only, so drop the Node runtime and image library it never
-  # loads. The patch removes them from the manifest the license check reads.
+  # Voice mode runs Kokoro in the browser and on the server, neither of which loads the image
+  # library. The patch removes it from the manifest the license check reads.
   "@huggingface/transformers": 3.8.1
-  "@huggingface/transformers>onnxruntime-node": "-"
   "@huggingface/transformers>sharp": "-"
 
 packageExtensions:
@@ -292,6 +293,8 @@ patchedDependencies:
   # Android: double-tap zoom no longer cancels itself, and taps near a link open it.
   react-native-pdf-jsi@6.1.0: patches/react-native-pdf-jsi@6.1.0.patch
   "@huggingface/transformers@3.8.1": patches/@huggingface__transformers@3.8.1.patch
+  # Only its CUDA download script needs these, and that script does not run (allowBuilds).
+  onnxruntime-node@1.21.0: patches/onnxruntime-node@1.21.0.patch
 
 # Unmet peers fail resolution, so a pin outside a dependency's peer range is
 # caught when the lockfile changes instead of scrolling past as a warning.

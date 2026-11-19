@@ -5,6 +5,7 @@ import * as Schema from "effect/Schema";
 import { CloudSpeechError, SPEECH_STREAM_PATH } from "@t3tools/contracts";
 import type {
   CloudSpeechModelId,
+  EnvironmentSpeechSynthesisRequest,
   CloudSpeechProvider,
   EnvironmentSpeechModelDownload,
   SettingsSecretValue,
@@ -263,6 +264,36 @@ export const transcribeEnvironmentPcm = (
         headers,
         payload: encodeSpeechPcmRequest(pcm, options),
       }),
+  });
+
+/** Loads the environment's voice, downloading it the first time. */
+export const prepareEnvironmentSpeechSynthesis = (
+  prepared: PreparedConnection,
+  canSend: () => boolean,
+) =>
+  request({
+    group: "voice",
+    prepared,
+    method: "POST",
+    path: (urls) => urls.prepareSynthesis(),
+    canSend,
+    timeoutMs: INFERENCE_OR_DOWNLOAD_TIMEOUT_MS,
+    run: ({ client, headers }) => client.prepareSynthesis({ headers }),
+  });
+
+/** One sentence read aloud on the environment, as a 16-bit mono WAV file. */
+export const synthesizeEnvironmentSpeech = (
+  prepared: PreparedConnection,
+  payload: EnvironmentSpeechSynthesisRequest,
+  canSend: () => boolean,
+) =>
+  request({
+    group: "voice",
+    prepared,
+    method: "POST",
+    path: (urls) => urls.speak(),
+    canSend,
+    run: ({ client, headers }) => client.speak({ headers, payload }),
   });
 
 /** Sends the transcript and draft context to a provider on `prepared`; a separate opt-in. */

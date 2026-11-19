@@ -29,6 +29,7 @@ import * as HttpApiBuilder from "effect/http-api/HttpApiBuilder";
 import type * as NetAddress from "effect/net/NetAddress";
 import * as SpeechService from "./SpeechService.ts";
 import * as CloudSpeech from "./CloudSpeech.ts";
+import * as SpeechSynthesis from "./SpeechSynthesis.ts";
 import * as ServerSettings from "../serverSettings.ts";
 import * as TextGeneration from "../textGeneration/TextGeneration.ts";
 import * as ProviderRegistry from "../provider/ProviderRegistry.ts";
@@ -50,6 +51,7 @@ const principal = (...scopes: AuthEnvironmentScope[]) =>
 
 const dependencies = Layer.mergeAll(
   Layer.mock(CloudSpeech.CloudSpeech)({}),
+  Layer.mock(SpeechSynthesis.SpeechSynthesis)({}),
   Layer.mock(ProviderRegistry.ProviderRegistry)({ getProviders: Effect.succeed([]) }),
   Layer.mock(ServerSettings.ServerSettingsService)({
     getSettings: Effect.succeed(DEFAULT_SERVER_SETTINGS),
@@ -376,4 +378,84 @@ effectIt.effect.each([
         reason,
       });
     }),
+);
+
+const speakRequest = { text: "Hello there.", voice: "af_heart", speed: 1.1 };
+
+effectIt.effect.each([
+  { name: "reads a sentence aloud as WAV", payload: speakRequest, status: 200 },
+  { name: "rejects empty text", payload: { ...speakRequest, text: "  " }, status: 400 },
+  {
+    name: "rejects text longer than a reply sentence",
+    payload: { ...speakRequest, text: "a".repeat(2_001) },
+    status: 400,
+  },
+  { name: "rejects a malformed voice", payload: { ...speakRequest, voice: "../x" }, status: 400 },
+  { name: "rejects a speed out of range", payload: { ...speakRequest, speed: 3 }, status: 400 },
+  {
+    name: "reports an unknown voice as a client error",
+    payload: { ...speakRequest, voice: "zz_nobody" },
+    error: new SpeechSynthesis.SpeechUnknownVoiceError({ voice: "zz_nobody" }),
+    status: 400,
+    reason: "invalid_command",
+  },
+  {
+    name: "reports an unsupported host as unavailable",
+    payload: speakRequest,
+    error: new SpeechService.SpeechUnsupportedPlatformError({
+      platform: "win32",
+      architecture: "arm64",
+    }),
+    status: 400,
+    reason: "speech_unavailable",
+  },
+  {
+    name: "reports a broken voice as an internal error",
+    payload: speakRequest,
+    error: new SpeechService.SpeechOperationError({ operation: "voice loading", cause: "offline" }),
+    status: 500,
+  },
+])("speak $name", ({ payload, status, ...options }) =>
+  Effect.gen(function* () {
+    const wav = SpeechSynthesis.encodeWav(new Float32Array([0, 0.5]), 24_000);
+    const speak = vi.fn(() =>
+      "error" in options ? Effect.fail(options.error) : Effect.succeed(wav),
+    );
+    const { handler, dispose } = HttpRouter.toWebHandler(
+      HttpApiBuilder.layer(HttpApi.make("environment").add(EnvironmentVoiceHttpApi)).pipe(
+        Layer.provide(speechHttpApiLayer),
+        Layer.provide(principal(AuthOrchestrationOperateScope)),
+        Layer.provide(Layer.mock(SpeechService.SpeechService)({})),
+        Layer.provide(Layer.mock(SpeechSynthesis.SpeechSynthesis)({ speak })),
+        Layer.provide(dependencies),
+        Layer.provide(HttpServer.layerServices),
+        Layer.provide(NodeServices.layer),
+      ),
+      { disableLogger: true },
+    );
+    yield* Effect.addFinalizer(() => Effect.promise(dispose));
+    const context = yield* Layer.build(Layer.mergeAll(dependencies, NodeServices.layer));
+    const response = yield* Effect.promise(() =>
+      handler(
+        new Request("http://localhost/api/voice/speak", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(payload),
+        }),
+        context,
+      ),
+    );
+    expect(response.status).toBe(status);
+    if (status === 400 && !("error" in options)) expect(speak).not.toHaveBeenCalled();
+    else expect(speak).toHaveBeenCalledWith(payload);
+    if (status === 200) {
+      expect(response.headers.get("content-type")).toBe("audio/wav");
+      expect(new Uint8Array(yield* Effect.promise(() => response.arrayBuffer()))).toEqual(wav);
+    }
+    if ("reason" in options)
+      expect(yield* Effect.promise(() => response.json())).toMatchObject({
+        code: "invalid_request",
+        reason: options.reason,
+      });
+  }),
 );

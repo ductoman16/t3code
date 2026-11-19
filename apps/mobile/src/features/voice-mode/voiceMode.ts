@@ -2,6 +2,7 @@ import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   createReplyReader,
   VoiceModeController,
+  VoiceModeError,
   type VoiceModeState,
   watchVoiceModeChimes,
 } from "@t3tools/client-runtime/voice-mode";
@@ -19,7 +20,8 @@ import { getComposerDraftSnapshot, setComposerDraftText } from "../../state/use-
 import { environmentThreadDetails } from "../../state/threads";
 import { createVoiceRecordingPermission } from "../voice-input/voiceRecordingPermission";
 import { voiceRouteAtom } from "../voice-input/voiceDestination";
-import { createAndroidSpeaker } from "./androidSpeaker";
+import { androidVoice, createAndroidSpeaker } from "./androidSpeaker";
+import { environmentVoice } from "./environmentVoice";
 import { createAndroidSpeechSource } from "./androidSpeechSource";
 import { nativeVoiceMode } from "./nativeVoiceMode";
 import { createRouteTranscriber } from "./routeTranscriber";
@@ -31,7 +33,22 @@ const SEND_AFTER_SILENCE_MS = 900;
 function createVoiceMode() {
   const native = nativeVoiceMode;
   if (!native) return null;
-  const speaker = createAndroidSpeaker(native, () => READING_SPEED);
+  const readRate = () => READING_SPEED;
+  // Replies are read where speech is transcribed: on the phone, or with Kokoro on the environment.
+  const speaker = createAndroidSpeaker(native, () => {
+    const route = appAtomRegistry.get(voiceRouteAtom);
+    if (route === null) return androidVoice(native, readRate);
+    if (route.synthesizer === "unsupported")
+      throw new VoiceModeError({
+        message:
+          "The environment chosen in Settings → Voice cannot read replies aloud. Update T3 Code there.",
+      });
+    if (route.synthesizer === "disconnected")
+      throw new VoiceModeError({
+        message: "The environment chosen in Settings → Voice is not connected.",
+      });
+    return environmentVoice(native, route.synthesizer, readRate);
+  });
   let askingForMicrophone = false;
   // Keeps the stored transcription choice loaded, so the first phrase uses it.
   appAtomRegistry.mount(voiceRouteAtom);
