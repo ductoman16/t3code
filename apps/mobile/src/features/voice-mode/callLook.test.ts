@@ -9,6 +9,7 @@ const on = (activity: VoiceModeState["activity"]): VoiceModeState => ({
   downloading: null,
   error: null,
   notice: null,
+  sent: 0,
 });
 
 describe("callLook", () => {

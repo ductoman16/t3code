@@ -13,8 +13,8 @@ class VoiceModeChimeTest {
     for (chime in VoiceModeChime.entries) {
       val pcm = chime.pcm()
       val note = VoiceModeChime.SAMPLE_RATE * VoiceModeChime.NOTE_MS / 1000
-      assertEquals(2 * note, pcm.size)
-      for (start in listOf(0, note)) {
+      assertEquals(0, pcm.size % note)
+      for (start in pcm.indices step note) {
         val edges = (0 until 8).map { pcm[start + it] } + (1..8).map { pcm[start + note - it] }
         assertTrue("$chime $edges", edges.all { abs(it.toInt()) < 1000 })
         assertTrue(chime.name, (start until start + note).maxOf { pcm[it].toInt() } in 7000..8200)

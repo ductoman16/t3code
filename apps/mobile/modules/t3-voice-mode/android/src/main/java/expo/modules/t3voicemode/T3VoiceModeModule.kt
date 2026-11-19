@@ -61,6 +61,7 @@ class T3VoiceModeModule : Module() {
     Function("playChime") { name: String ->
       val chime = when (name) {
         "start" -> VoiceModeChime.START
+        "sent" -> VoiceModeChime.SENT
         "stop" -> VoiceModeChime.STOP
         else -> throw IllegalArgumentException("There is no \"$name\" chime.")
       }
