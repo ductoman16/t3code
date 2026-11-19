@@ -220,7 +220,8 @@ overrides:
   # builds a z.object of z.string().regex() and calls parse, which zod 4 keeps unchanged.
   "@vercel/config>zod": 4.6.7
   # Voice mode runs Kokoro in the browser and on the server, neither of which loads the image
-  # library. The patch removes it from the manifest the license check reads.
+  # library. The patch removes it from the manifest the license check reads and from the Node
+  # build's imports, which would otherwise fail to load in the packaged server.
   "@huggingface/transformers": 3.8.1
   "@huggingface/transformers>sharp": "-"
 
