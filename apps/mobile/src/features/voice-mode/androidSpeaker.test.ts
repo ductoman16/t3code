@@ -83,6 +83,19 @@ describe("createAndroidSpeaker", () => {
     expect(said.at(-1)?.id).not.toBe(said[1]!.id);
   });
 
+  it("holds a sentence that arrives during a pause until the resume", async () => {
+    const { speaker, said, stops } = await prepared();
+
+    speaker.pause();
+    speaker.say("On it.");
+    expect(said).toEqual([]);
+    expect(stops()).toBe(0);
+    expect(speaker.isActive()).toBe(true);
+
+    speaker.resume();
+    expect(said.map((entry) => entry.text)).toEqual(["On it."]);
+  });
+
   it("drops everything on stop", async () => {
     const { speaker } = await prepared();
     speaker.say("One.");
