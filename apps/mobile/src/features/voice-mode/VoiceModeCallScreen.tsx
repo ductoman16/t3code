@@ -3,6 +3,7 @@ import { threadRuntimeIsActive } from "@t3tools/client-runtime/state/shell";
 import { useNavigation, type StaticScreenProps } from "@react-navigation/native";
 import { EnvironmentId, ThreadId } from "@t3tools/contracts";
 import { requireNativeModule } from "expo";
+import { useGT, useMessages } from "gt-react-native";
 import { useEffect } from "react";
 import { Platform, Pressable, StatusBar, View } from "react-native";
 import Animated, { css } from "react-native-reanimated";
@@ -101,6 +102,8 @@ export function VoiceModeCallRouteScreen({ route }: VoiceModeCallRouteScreenProp
   const insets = useSafeAreaInsets();
   const state = useVoiceModeState();
   const caption = useVoiceModeCaption();
+  const gt = useGT();
+  const m = useMessages();
   const thread = useThreadShell(
     scopeThreadRef(
       EnvironmentId.make(route.params.environmentId),
@@ -143,7 +146,7 @@ export function VoiceModeCallRouteScreen({ route }: VoiceModeCallRouteScreenProp
             fontWeight: "600",
           }}
         >
-          {callStatusLabel(state, look)}
+          {callStatusLabel(state, look, m)}
         </AppText>
       </View>
       <AppText
@@ -160,7 +163,7 @@ export function VoiceModeCallRouteScreen({ route }: VoiceModeCallRouteScreenProp
       </AppText>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel="Hang up"
+        accessibilityLabel={gt("Hang up")}
         onPress={turnOffVoiceMode}
         style={({ pressed }) => ({
           alignSelf: "center",

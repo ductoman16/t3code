@@ -41,7 +41,7 @@ export function ThreadHeader(props: {
   const voiceAction: AppBarAction[] = props.voiceMode
     ? [
         {
-          accessibilityLabel: props.voiceMode.on ? "Open call" : "Start voice mode",
+          accessibilityLabel: props.voiceMode.on ? gt("Open call") : gt("Start voice mode"),
           icon: "phone.connection",
           selected: props.voiceMode.on,
           separateBackground: false,

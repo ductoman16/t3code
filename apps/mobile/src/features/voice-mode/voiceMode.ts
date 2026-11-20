@@ -7,12 +7,14 @@ import {
   watchVoiceModeChimes,
 } from "@t3tools/client-runtime/voice-mode";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { msg } from "gt-react-native";
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 import { getRecordingPermissionsAsync } from "expo-audio";
 import * as Notifications from "expo-notifications";
 import { AppRegistry, AppState } from "react-native";
 
 import * as Dialog from "../../components/ui/Dialog";
+import { m } from "../../i18n/messages";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
 import { appAtomRegistry } from "../../state/atom-registry";
@@ -91,7 +93,7 @@ function createVoiceMode() {
   let reported: VoiceModeState["error"] = null;
   controller.subscribe(() => {
     const { error } = controller.state;
-    if (error && error !== reported) Dialog.alert("Voice mode stopped", error);
+    if (error && error !== reported) Dialog.alert(m(msg("Voice mode stopped")), error);
     reported = error;
   });
   const call = createVoiceModeCall({

@@ -1,4 +1,7 @@
 import type { VoiceModeState } from "@t3tools/client-runtime/voice-mode";
+import { msg } from "gt-react-native";
+
+import { m, type MessageResolver } from "../../i18n/messages";
 
 /** What the call screen's circle shows. */
 export type CallLook =
@@ -25,18 +28,22 @@ export function callLook(state: VoiceModeState, turnRunning: boolean): CallLook 
 }
 
 const LABELS = {
-  connecting: "Connecting",
-  listening: "Listening",
-  hearing: "Hearing you",
-  transcribing: "Transcribing",
-  sending: "Sending",
-  thinking: "Thinking",
-  speaking: "Speaking",
-} as const satisfies Record<CallLook, string>;
+  connecting: msg("Connecting"),
+  listening: msg("Listening"),
+  hearing: msg("Hearing you"),
+  transcribing: msg("Transcribing"),
+  sending: msg("Sending"),
+  thinking: msg("Thinking"),
+  speaking: msg("Speaking"),
+} satisfies Record<CallLook, string>;
 
-export function callStatusLabel(state: VoiceModeState, look: CallLook): string {
+export function callStatusLabel(
+  state: VoiceModeState,
+  look: CallLook,
+  resolve: MessageResolver = m,
+): string {
   if (look === "connecting" && state.downloading !== null) {
-    return `Downloading ${Math.round(state.downloading * 100)}%`;
+    return resolve(msg("Downloading {percent}%", { percent: Math.round(state.downloading * 100) }));
   }
-  return LABELS[look];
+  return resolve(LABELS[look]);
 }

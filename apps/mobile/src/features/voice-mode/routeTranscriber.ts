@@ -7,6 +7,9 @@ import {
   VoiceModeError,
   type VoiceModeTranscriber,
 } from "@t3tools/client-runtime/voice-mode";
+import { msg } from "gt-react-native";
+
+import { m } from "../../i18n/messages";
 
 /**
  * Transcribes each utterance file the way dictation would, on the route chosen in Settings →
@@ -57,5 +60,5 @@ export function createRouteTranscriber(input: {
 function messageOf(cause: unknown): string {
   return cause instanceof Error && cause.message !== ""
     ? cause.message
-    : "That phrase could not be transcribed.";
+    : m(msg("That phrase could not be transcribed."));
 }

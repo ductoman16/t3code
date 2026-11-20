@@ -1,8 +1,10 @@
 import { scopedThreadKey, scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { ScopedThreadRef } from "@t3tools/contracts";
+import { msg } from "gt-react";
 import { useEffect, useSyncExternalStore } from "react";
 
 import { toastManager } from "../components/ui/toast";
+import { m } from "../i18n/messages";
 import { chooseRecordingMicrophone } from "../speech/browserMicrophones";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useVoiceTranscriptionDestination } from "../speech/useEnvironmentSpeechInput";
@@ -43,10 +45,14 @@ let reported: Pick<VoiceModeState, "error" | "notice"> = { error: null, notice: 
 voiceMode.subscribe(() => {
   const { error, notice } = voiceMode.state;
   if (error && error !== reported.error) {
-    toastManager.add({ type: "error", title: "Voice mode stopped", description: error });
+    toastManager.add({ type: "error", title: m(msg("Voice mode stopped")), description: error });
   }
   if (notice && notice !== reported.notice) {
-    toastManager.add({ type: "warning", title: "Voice mode", description: notice });
+    toastManager.add({
+      type: "warning",
+      title: m(msg("Voice mode", { $context: "toast title" })),
+      description: notice,
+    });
   }
   reported = { error, notice };
 });

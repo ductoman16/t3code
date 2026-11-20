@@ -3,6 +3,7 @@
  * are read aloud as they stream; talking over one cuts it off. It stays with the thread it was turned
  * on in, and the thread's model is told by a note when voice mode comes on and when it goes off.
  */
+import { mFallback, msg } from "gt-i18n";
 import * as Schema from "effect/Schema";
 
 import { withVoiceModeEnded, withVoiceModeInstructions } from "./voiceModeInstructions.ts";
@@ -169,7 +170,7 @@ function appendPhrase(draft: string, phrase: string): string {
 function describe(error: unknown): string {
   if (isVoiceModeError(error)) return error.message;
   const detail = error instanceof Error ? error.message : String(error);
-  return `Voice mode stopped unexpectedly: ${detail}`;
+  return mFallback(msg("Voice mode stopped unexpectedly: {detail}", { detail }));
 }
 
 interface Utterance<Audio> {
