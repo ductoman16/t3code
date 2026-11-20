@@ -1,8 +1,12 @@
+import type { MicVAD } from "@ricky0123/vad-web";
 import {
+  isVoiceModeError,
   VoiceModeError,
   type SpeechSource,
   type SpeechSourceHandlers,
 } from "@t3tools/client-runtime/voice-mode";
+
+import { shouldSwitchMicrophone, type OpenMicrophone } from "./microphoneSwitch";
 
 const DETECTOR_ASSETS = `${import.meta.env.BASE_URL}${import.meta.env.VITE_VOICE_MODE_DETECTOR_ASSETS}`;
 
@@ -16,9 +20,12 @@ const DETECTOR_OPTIONS = {
   minSpeechMs: 160,
   redemptionMs: 600,
   preSpeechPadMs: 300,
+  // A switch of microphone mid-phrase sends what was heard so far rather than dropping it.
+  submitUserSpeechOnPause: true,
 } as const;
 
 function microphoneError(error: unknown): VoiceModeError {
+  if (isVoiceModeError(error)) return error;
   const name = error instanceof DOMException ? error.name : "";
   if (name === "NotAllowedError" || name === "SecurityError") {
     return new VoiceModeError({
@@ -30,7 +37,7 @@ function microphoneError(error: unknown): VoiceModeError {
   if (name === "NotFoundError" || name === "OverconstrainedError") {
     return new VoiceModeError({
       message:
-        "The microphone chosen in Settings → Voice was not found. Connect it or choose another, then turn voice mode on again.",
+        "No microphone was found. Connect one or choose another in Settings → Voice, then turn voice mode on again.",
       cause: error,
     });
   }
@@ -46,21 +53,90 @@ function detectorError(error: unknown): VoiceModeError {
 }
 
 /**
- * Listens to the microphone and cuts what it hears into utterances.
- *
- * Echo cancellation is on so the agent's spoken reply, played by this same app, is removed from
- * what the microphone picks up. That is what lets the user talk over a reply on speakers.
+ * Listens to the microphone and cuts what it hears into utterances. When devices change mid-call,
+ * the call moves to whatever microphone Settings → Voice's order now picks, a new system default
+ * included; the browser keeps recording from the device it first opened otherwise. Echo
+ * cancellation lets the user talk over a reply played on speakers.
  */
 export function createMicrophoneSpeechSource(
   handlers: SpeechSourceHandlers,
-  options: { readonly microphoneId: string },
+  options: {
+    /** The device id to record from, empty for the system default. */
+    readonly chooseMicrophone: () => Promise<string>;
+  },
 ): SpeechSource {
-  let detector: { destroy(): Promise<void> } | null = null;
+  let detector: MicVAD | null = null;
+  let open: (OpenMicrophone & { readonly track: MediaStreamTrack | undefined }) | null = null;
   let stopped = false;
+  let switching = false;
+  let switchAgain = false;
+
+  const openStream = async (): Promise<MediaStream> => {
+    try {
+      const microphoneId = await options.chooseMicrophone();
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          ...(microphoneId ? { deviceId: { exact: microphoneId } } : {}),
+          channelCount: 1,
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+      });
+      const [track] = stream.getAudioTracks();
+      open = { microphoneId, groupId: track?.getSettings().groupId ?? "", track };
+      // A track ends when its device goes away; stopping it ourselves does not fire this.
+      track?.addEventListener("ended", followDevices, { once: true });
+      return stream;
+    } catch (error) {
+      throw microphoneError(error);
+    }
+  };
+
+  const switchIfNeeded = async () => {
+    const current = detector;
+    const was = open;
+    if (!current || !was || stopped) return;
+    const [microphoneId, devices] = await Promise.all([
+      options.chooseMicrophone(),
+      navigator.mediaDevices.enumerateDevices(),
+    ]);
+    const gone = was.track?.readyState === "ended";
+    if (!gone && !shouldSwitchMicrophone(was, microphoneId, devices)) return;
+    // Pausing ends the phrase in progress and stops the old stream; starting opens the new one.
+    await current.pause();
+    if (!stopped) await current.start();
+  };
+
+  // Device events arrive in bursts, so switches run one at a time and a burst ends in one recheck.
+  function followDevices() {
+    if (stopped) return;
+    if (switching) {
+      switchAgain = true;
+      return;
+    }
+    switching = true;
+    void (async () => {
+      try {
+        do {
+          switchAgain = false;
+          await switchIfNeeded();
+        } while (switchAgain);
+      } catch (error) {
+        if (!stopped) handlers.onError(microphoneError(error));
+      } finally {
+        switching = false;
+      }
+    })();
+  }
 
   const release = async () => {
+    navigator.mediaDevices.removeEventListener("devicechange", followDevices);
     const current = detector;
     detector = null;
+    open = null;
+    // Hanging up drops a phrase in progress instead of sending it.
+    current?.setOptions({ submitUserSpeechOnPause: false });
     await current?.destroy();
   };
 
@@ -71,6 +147,14 @@ export function createMicrophoneSpeechSource(
         throw detectorError(error);
       });
       const microphone: { failure?: VoiceModeError } = {};
+      const recordingStream = async () => {
+        try {
+          return await openStream();
+        } catch (error) {
+          microphone.failure = microphoneError(error);
+          throw microphone.failure;
+        }
+      };
       try {
         detector = await MicVAD.new({
           ...DETECTOR_OPTIONS,
@@ -82,36 +166,8 @@ export function createMicrophoneSpeechSource(
             ort.env.wasm.proxy = false;
             ort.env.logLevel = "error";
           },
-          getStream: async () => {
-            try {
-              const stream = await navigator.mediaDevices.getUserMedia({
-                audio: {
-                  ...(options.microphoneId ? { deviceId: { exact: options.microphoneId } } : {}),
-                  channelCount: 1,
-                  echoCancellation: true,
-                  noiseSuppression: true,
-                  autoGainControl: true,
-                },
-              });
-              for (const track of stream.getAudioTracks()) {
-                track.addEventListener(
-                  "ended",
-                  () =>
-                    handlers.onError(
-                      new VoiceModeError({
-                        message:
-                          "The microphone disconnected. Reconnect it and turn voice mode on again.",
-                      }),
-                    ),
-                  { once: true },
-                );
-              }
-              return stream;
-            } catch (error) {
-              microphone.failure = microphoneError(error);
-              throw microphone.failure;
-            }
-          },
+          getStream: recordingStream,
+          resumeStream: openStream,
           onSpeechStart: handlers.onSpeechStart,
           onSpeechRealStart: handlers.onSpeechConfirmed,
           onVADMisfire: handlers.onSpeechCancel,
@@ -121,7 +177,11 @@ export function createMicrophoneSpeechSource(
         throw microphone.failure ?? detectorError(error);
       }
       // Stopped while the microphone was still opening.
-      if (stopped) await release();
+      if (stopped) {
+        await release();
+        return;
+      }
+      navigator.mediaDevices.addEventListener("devicechange", followDevices);
     },
 
     async stop() {

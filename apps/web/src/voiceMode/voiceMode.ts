@@ -3,7 +3,7 @@ import type { ScopedThreadRef } from "@t3tools/contracts";
 import { useEffect, useSyncExternalStore } from "react";
 
 import { toastManager } from "../components/ui/toast";
-import { getClientSettings } from "../hooks/useSettings";
+import { chooseRecordingMicrophone } from "../speech/browserMicrophones";
 import { appAtomRegistry } from "../rpc/atomRegistry";
 import { useVoiceTranscriptionDestination } from "../speech/useEnvironmentSpeechInput";
 import { environmentThreadDetails } from "../state/threads";
@@ -29,7 +29,7 @@ let transcriptionDestination: TranscriptionDestination | null = null;
 /** One voice mode for the whole window: it follows whichever composer is on screen. */
 const voiceMode = new VoiceModeController({
   createSpeechSource: (handlers) =>
-    createMicrophoneSpeechSource(handlers, { microphoneId: getClientSettings().voiceMicrophone }),
+    createMicrophoneSpeechSource(handlers, { chooseMicrophone: chooseRecordingMicrophone }),
   transcriber: createEnvironmentTranscriber(() => transcriptionDestination),
   speaker: createKokoroSpeaker(readVoiceModeSettings),
   schedule: (delayMs, run) => {
