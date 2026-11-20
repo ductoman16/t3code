@@ -1,9 +1,16 @@
+import { isSystemDefaultDeviceId } from "../speech/microphoneOrder";
+
 /** The microphone a call is recording from. */
 export interface OpenMicrophone {
   /** The device id it was opened with, empty for the system default. */
   readonly microphoneId: string;
   /** The physical device the browser opened, which for the system default says which one it was. */
   readonly groupId: string;
+}
+
+/** The id to open, empty for the system default, including Chromium's "default" alias once saved. */
+export function recordingDeviceId(microphoneId: string): string {
+  return isSystemDefaultDeviceId(microphoneId) ? "" : microphoneId;
 }
 
 /**
