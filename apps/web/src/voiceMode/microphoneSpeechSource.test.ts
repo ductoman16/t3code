@@ -2,11 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import { createMicrophoneSpeechSource } from "./microphoneSpeechSource";
 
-// Stands in for MicVAD, which only ever sees the source's steady stream.
+// Stands in for MicVAD, which only ever sees the source's steady stream. `loading` holds it in
+// the middle of loading its model when a test sets it.
+const detector = vi.hoisted(() => ({ loading: null as Promise<void> | null }));
 vi.mock("@ricky0123/vad-web", () => ({
   MicVAD: {
     async new(options: { getStream: () => Promise<MediaStream> }) {
       await options.getStream();
+      await detector.loading;
       return { destroy: async () => {} };
     },
   },
@@ -115,6 +118,7 @@ async function started(env: ReturnType<typeof setup>) {
 }
 
 afterEach(() => {
+  detector.loading = null;
   vi.unstubAllGlobals();
 });
 
@@ -196,9 +200,7 @@ describe("createMicrophoneSpeechSource", () => {
   it("reports an error when the microphone is gone and none is left to move to", async () => {
     const env = setup({ chosen: "", systemDefault: "laptop" });
     await started(env);
-    env.mediaDevices.getUserMedia.mockRejectedValueOnce(
-      new DOMException("No device", "NotFoundError"),
-    );
+    env.mediaDevices.getUserMedia.mockRejectedValue(new DOMException("No device", "NotFoundError"));
 
     env.tracks[0]?.disconnect();
 
@@ -248,6 +250,38 @@ describe("createMicrophoneSpeechSource", () => {
     expect(env.tracks[0]?.readyState).toBe("ended");
     expect(env.hearing()).toEqual([]);
     expect(env.contexts[0]?.close).toHaveBeenCalledOnce();
+  });
+
+  it("opens no microphone when hung up while the detector loads", async () => {
+    const env = setup({ chosen: "", systemDefault: "laptop" });
+    let finishLoading: (() => void) | undefined;
+    detector.loading = new Promise((resolve) => {
+      finishLoading = resolve;
+    });
+    const starting = env.source.start();
+    await vi.waitFor(() => expect(finishLoading).toBeDefined());
+
+    const stopping = env.source.stop();
+    finishLoading?.();
+    await Promise.all([starting, stopping]);
+
+    expect(env.opened).toEqual([]);
+  });
+
+  it("moves on to a microphone that is still there when the replacement vanishes too", async () => {
+    const env = setup({ chosen: "headset", systemDefault: "laptop" });
+    await started(env);
+    env.mediaDevices.getUserMedia.mockImplementationOnce(async () => {
+      // The dock went away while it was opening; the order now picks the system default.
+      env.state.chosen = "";
+      throw new DOMException("Gone", "NotFoundError");
+    });
+
+    env.state.chosen = "dock";
+    env.tracks[0]?.disconnect();
+
+    await vi.waitFor(() => expect(env.hearing()).toEqual(["laptop"]));
+    expect(env.handlers.onError).not.toHaveBeenCalled();
   });
 
   it("stops following devices on hang-up", async () => {

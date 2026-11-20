@@ -100,11 +100,20 @@ export function createMicrophoneSpeechSource(
     return { microphoneId, groupId: track?.getSettings().groupId ?? "", stream, track };
   };
 
-  /** Plugs a microphone in, then lets go of the one it replaces. */
+  /** Plugs a microphone in, then lets go of the one it replaces. One hung up on is closed instead. */
   const plugIn = (microphone: Microphone) => {
-    if (!context || !mixer) return;
-    const node = new MediaStreamAudioSourceNode(context, { mediaStream: microphone.stream });
-    node.connect(mixer);
+    if (stopped || !context || !mixer) {
+      stopTracks(microphone.stream);
+      return;
+    }
+    let node: MediaStreamAudioSourceNode;
+    try {
+      node = new MediaStreamAudioSourceNode(context, { mediaStream: microphone.stream });
+      node.connect(mixer);
+    } catch (error) {
+      stopTracks(microphone.stream);
+      throw error;
+    }
     const previous = current;
     current = { ...microphone, node };
     // A track ends when its device goes away; stopping it ourselves does not fire this.
@@ -130,7 +139,10 @@ export function createMicrophoneSpeechSource(
     } catch (error) {
       // The old microphone still works, or another device change is already queued to retry.
       if (!gone || switchAgain) return;
-      throw error;
+      // The replacement vanished too; the order may now pick one that is still there.
+      next = await openMicrophone().catch(() => {
+        throw error;
+      });
     }
     if (next) plugIn(next);
   };
@@ -181,13 +193,8 @@ export function createMicrophoneSpeechSource(
       context = new AudioContext();
       mixer = context.createMediaStreamDestination();
       const steady = mixer.stream;
-      try {
-        const first = await openMicrophone();
-        if (first) plugIn(first);
-      } catch (error) {
-        await release();
-        throw microphoneError(error);
-      }
+      // The detector loads before the microphone opens, so hanging up during a slow load never
+      // leaves the microphone on.
       try {
         detector = await MicVAD.new({
           ...DETECTOR_OPTIONS,
@@ -218,6 +225,14 @@ export function createMicrophoneSpeechSource(
         await release();
         return;
       }
+      try {
+        const first = await openMicrophone();
+        if (first) plugIn(first);
+      } catch (error) {
+        await release();
+        throw microphoneError(error);
+      }
+      if (stopped) return;
       navigator.mediaDevices.addEventListener("devicechange", followDevices);
       // The microphone may have changed while the detector loaded.
       followDevices();
