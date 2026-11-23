@@ -5,7 +5,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
-import { VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
+import { VOICE_MODE_DEFAULT_SPEED, VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
 import { SavedViewIdentity } from "@t3tools/client-runtime/saved-views";
 import {
   EnvironmentId,
@@ -647,3 +647,7 @@ const make = Effect.fn("MobilePreferencesStore.make")(function* () {
 });
 
 export const layer = Layer.effect(MobilePreferencesStore, make());
+
+export function voiceModeReadingSpeed(preferences?: Preferences): number {
+  return preferences?.voiceModeSpeed ?? VOICE_MODE_DEFAULT_SPEED;
+}

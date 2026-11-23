@@ -1,7 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   createReplyReader,
-  VOICE_MODE_DEFAULT_SPEED,
   VoiceModeController,
   VoiceModeError,
   type VoiceModeState,
@@ -19,6 +18,7 @@ import * as Dialog from "../../components/ui/Dialog";
 import { m } from "../../i18n/messages";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
+import { voiceModeReadingSpeed } from "../../persistence/mobile-preferences";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { getComposerDraftSnapshot, setComposerDraftText } from "../../state/use-composer-drafts";
 import { mobilePreferencesAtom } from "../../state/preferences";
@@ -37,14 +37,12 @@ const SEND_AFTER_SILENCE_MS = 900;
 function createVoiceMode() {
   const native = nativeVoiceMode;
   if (!native) return null;
-  const readRate = () =>
-    AsyncResult.getOrElse(
-      AsyncResult.map(
-        appAtomRegistry.get(mobilePreferencesAtom),
-        (preferences) => preferences.voiceModeSpeed ?? VOICE_MODE_DEFAULT_SPEED,
-      ),
-      () => VOICE_MODE_DEFAULT_SPEED,
+  const readRate = () => {
+    const preferences = appAtomRegistry.get(mobilePreferencesAtom);
+    return voiceModeReadingSpeed(
+      AsyncResult.isSuccess(preferences) ? preferences.value : undefined,
     );
+  };
   // Replies are read where speech is transcribed: on the phone, or with Kokoro on the environment.
   const speaker = createAndroidSpeaker(native, () => {
     const route = appAtomRegistry.get(voiceRouteAtom);

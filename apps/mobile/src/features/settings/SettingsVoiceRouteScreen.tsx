@@ -1,4 +1,4 @@
-import { VOICE_MODE_DEFAULT_SPEED, VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
+import { VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
 import { msg, useGT, useMessages } from "gt-react-native";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
@@ -20,6 +20,7 @@ import {
   type MicrophoneKind,
   microphoneEntryKey,
 } from "../../lib/microphonePriority";
+import { voiceModeReadingSpeed } from "../../persistence/mobile-preferences";
 import { mobilePreferencesAtom, saveMobilePreferences } from "../../state/preferences";
 import { useAtomCommand } from "../../state/use-atom-command";
 import { ListRowLayout } from "../../components/ui/ListRowLayout";
@@ -245,9 +246,9 @@ export function SettingsVoiceRouteScreen() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomCommand(saveMobilePreferences);
   const ready = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
-  const readingSpeed = AsyncResult.isSuccess(preferencesResult)
-    ? (preferencesResult.value.voiceModeSpeed ?? VOICE_MODE_DEFAULT_SPEED)
-    : VOICE_MODE_DEFAULT_SPEED;
+  const readingSpeed = voiceModeReadingSpeed(
+    AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value : undefined,
+  );
   const entries = deviceMicrophoneOrder(
     AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value.microphones : undefined,
   );
