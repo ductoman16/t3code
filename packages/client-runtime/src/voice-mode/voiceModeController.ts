@@ -207,10 +207,10 @@ export class VoiceModeController<Audio = Float32Array> {
   /** A message voice mode sent has not been answered yet. */
   private awaitingReply = false;
   /**
-   * Threads whose model was last told the conversation is spoken. Kept when voice mode goes off:
-   * a model told so is owed the news that it ended.
+   * The run in which each thread's model was last told the conversation is spoken. Kept when voice
+   * mode goes off: a model told so is owed the news that it ended.
    */
-  private readonly spokenTo = new Set<string>();
+  private readonly spokenTo = new Map<string, number>();
   private readonly repliesBeingSaid = new Set<string>();
   /** Replies the user talked over; the rest of each is not said. */
   private readonly repliesCutOff = new Set<string>();
@@ -299,13 +299,16 @@ export class VoiceModeController<Audio = Float32Array> {
    */
   noteMessage(thread: string, text: string): { readonly text: string; readonly sent: () => void } {
     const on = this.current.power === "on";
+    const run = this.run;
+    // Hours of other turns, or a provider switch, can pass while off; each call is announced afresh.
+    const told = on ? this.spokenTo.get(thread) === run : this.spokenTo.has(thread);
     // An empty message has nothing to carry the note, and a command must stay a command.
-    if (text.trim() === "" || text.trimStart().startsWith("/") || on === this.spokenTo.has(thread))
+    if (text.trim() === "" || text.trimStart().startsWith("/") || on === told)
       return { text, sent: () => {} };
     return {
       text: on ? withVoiceModeInstructions(text) : withVoiceModeEnded(text),
       sent: () => {
-        if (on) this.spokenTo.add(thread);
+        if (on) this.spokenTo.set(thread, run);
         else this.spokenTo.delete(thread);
       },
     };
