@@ -241,6 +241,8 @@ export class VoiceModeController<Audio = Float32Array> {
     const abort = new AbortController();
     this.abort = abort;
     this.conversationThread = this.target?.thread ?? null;
+    // Hours of other turns, or a provider switch, can pass while off; each call is announced afresh.
+    if (this.conversationThread !== null) this.spokenTo.delete(this.conversationThread);
     this.setState({ ...OFF, power: "starting" });
     try {
       // A microphone still closing from the last run must be released before it is opened again.

@@ -764,7 +764,7 @@ describe("VoiceModeController", () => {
       expect(composer.sent).toEqual(["run the tests"]);
     });
 
-    it("says nothing when voice mode is back on before anything was typed", async () => {
+    it("tells the agent again when voice mode is back on before anything was typed", async () => {
       const { controller, composer, clock, say } = await setUpOn();
       await say("run the tests");
       clock.advance(SEND_AFTER_SILENCE_MS);
@@ -774,7 +774,10 @@ describe("VoiceModeController", () => {
       await say("run them again");
       clock.advance(SEND_AFTER_SILENCE_MS);
 
-      expect(composer.sent).toEqual([withVoiceModeInstructions("run the tests"), "run them again"]);
+      expect(composer.sent).toEqual([
+        withVoiceModeInstructions("run the tests"),
+        withVoiceModeInstructions("run them again"),
+      ]);
     });
 
     it("tells the agent again when voice mode comes back after it was told it ended", async () => {
