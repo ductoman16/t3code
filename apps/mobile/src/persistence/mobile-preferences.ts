@@ -5,6 +5,7 @@ import * as Option from "effect/Option";
 import * as Ref from "effect/Ref";
 import * as Schema from "effect/Schema";
 import * as Semaphore from "effect/Semaphore";
+import { VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
 import { SavedViewIdentity } from "@t3tools/client-runtime/saved-views";
 import {
   EnvironmentId,
@@ -27,6 +28,10 @@ import { MOBILE_THEME_IDS, type MobileThemeId, type MobileThemeMode } from "../l
 import * as MobileDatabase from "./mobile-database";
 import * as MobileSecureStorage from "./mobile-secure-storage";
 import { MobileStorageDecodeError, MobileStorageEncodeError } from "./mobile-storage";
+
+const VoiceModeSpeed = Schema.Literals(VOICE_MODE_SPEEDS);
+type VoiceModeSpeed = typeof VoiceModeSpeed.Type;
+const isVoiceModeSpeed = Schema.is(VoiceModeSpeed);
 
 const PREFERENCES_KEY = "t3code.preferences";
 const PREFERENCES_FALLBACK_KEY = "t3code.preferences.fallback";
@@ -164,6 +169,7 @@ export interface Preferences {
   readonly followUpBehavior?: FollowUpBehavior;
   /** The client `language` setting: a locale code or "system". Unset means English. */
   readonly language?: string;
+  readonly voiceModeSpeed?: VoiceModeSpeed;
   readonly microphones?: ReadonlyArray<MicrophoneEntry>;
   readonly projectGroupingEnabled?: boolean;
   readonly projectGroupingMode?: SidebarProjectGroupingMode;
@@ -254,6 +260,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     composerEnterBehavior?: ComposerEnterBehavior;
     followUpBehavior?: FollowUpBehavior;
     language?: string;
+    voiceModeSpeed?: VoiceModeSpeed;
     microphones?: ReadonlyArray<MicrophoneEntry>;
     projectGroupingEnabled?: boolean;
     projectGroupingMode?: SidebarProjectGroupingMode;
@@ -369,6 +376,7 @@ function sanitizePreferences(parsed: Preferences): Preferences {
     preferences.followUpBehavior = parsed.followUpBehavior;
   }
   if (typeof parsed.language === "string") preferences.language = parsed.language;
+  if (isVoiceModeSpeed(parsed.voiceModeSpeed)) preferences.voiceModeSpeed = parsed.voiceModeSpeed;
   if (Array.isArray(parsed.microphones)) {
     preferences.microphones = parsed.microphones.flatMap((entry): MicrophoneEntry[] => {
       if (typeof entry !== "object" || entry === null || !isMicrophoneKind(entry.kind)) return [];

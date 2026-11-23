@@ -1,3 +1,4 @@
+import { VOICE_MODE_DEFAULT_SPEED, VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
 import { msg, useGT, useMessages } from "gt-react-native";
 import { ScreenScrollView as ScrollView } from "../../components/ui/ScreenScrollView";
 import { useAtomSet, useAtomValue } from "@effect/atom-react";
@@ -32,6 +33,7 @@ import {
   voiceGrantAtom,
   hasEnvironmentVoiceCapture,
 } from "../voice-input/voiceDestination";
+import { voiceModeAvailable } from "../voice-mode/voiceMode";
 import { LocalModelChoice } from "./VoiceModelSection";
 import { CloudVoiceChoice } from "./CloudVoiceSection";
 import type { VoiceGrant } from "../voice-input/voiceGrantStorage";
@@ -243,6 +245,9 @@ export function SettingsVoiceRouteScreen() {
   const preferencesResult = useAtomValue(mobilePreferencesAtom);
   const savePreferences = useAtomCommand(saveMobilePreferences);
   const ready = AsyncResult.isSuccess(preferencesResult) && !preferencesResult.waiting;
+  const readingSpeed = AsyncResult.isSuccess(preferencesResult)
+    ? (preferencesResult.value.voiceModeSpeed ?? VOICE_MODE_DEFAULT_SPEED)
+    : VOICE_MODE_DEFAULT_SPEED;
   const entries = deviceMicrophoneOrder(
     AsyncResult.isSuccess(preferencesResult) ? preferencesResult.value.microphones : undefined,
   );
@@ -362,6 +367,20 @@ export function SettingsVoiceRouteScreen() {
                   })}
             </Text>
           </>
+        ) : null}
+        {voiceModeAvailable ? (
+          <SettingsSection title={gt("Reading speed")}>
+            {VOICE_MODE_SPEEDS.map((speed, index) => (
+              <ListChoiceRow
+                key={speed}
+                label={`${speed}×`}
+                selected={speed === readingSpeed}
+                separated={index > 0}
+                disabled={!ready}
+                onPress={() => void savePreferences({ voiceModeSpeed: speed })}
+              />
+            ))}
+          </SettingsSection>
         ) : null}
         <SettingsSection title={gt("Preferred order")}>
           {entries.map((entry, index) => {
