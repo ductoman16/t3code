@@ -36,8 +36,11 @@ async function setup() {
   const seed = NodePath.join(root, "seed");
   await NodeFSP.mkdir(seed);
   git(seed, "init", "--quiet", "--initial-branch", BRANCH);
-  git(seed, "commit", "--quiet", "--allow-empty", "--message", "release");
-  git(seed, "commit", "--quiet", "--allow-empty", "--message", "voice mode");
+  await NodeFSP.writeFile(NodePath.join(seed, "settings"), "release\n");
+  git(seed, "add", "settings");
+  git(seed, "commit", "--quiet", "--message", "release");
+  await NodeFSP.writeFile(NodePath.join(seed, "settings"), "voice mode\n");
+  git(seed, "commit", "--quiet", "--all", "--message", "voice mode");
   git(root, "clone", "--quiet", "--bare", seed, "fork.git");
   const fork = NodePath.join(root, "fork.git");
   git(root, "clone", "--quiet", fork, "here");
@@ -62,6 +65,17 @@ async function setup() {
       return { status: run.status, stdout: run.stdout.trim(), stderr: run.stderr };
     },
     head: () => git(here, "rev-parse", "HEAD"),
+    /** Moves this branch onto a new release, as the sync does, without pushing it. */
+    async moveOntoNewRelease(releaseSettings = "release\n") {
+      git(here, "checkout", "--quiet", "-b", "release", `${BRANCH}~1`);
+      await NodeFSP.writeFile(NodePath.join(here, "settings"), releaseSettings);
+      git(here, "commit", "--quiet", "--allow-empty", "--all", "--message", "new release");
+      return NodeChildProcess.spawnSync(
+        "git",
+        ["rebase", "--quiet", "--onto", "release", `${BRANCH}~1`, BRANCH],
+        { cwd: here, env: ENV },
+      ).status;
+    },
   };
 }
 
@@ -87,20 +101,48 @@ describe("voice-fork-catch-up.sh", () => {
   it("keeps an unpushed rebase off the fork's tip onto a new release", async () => {
     const env = await setup();
     const fork = env.head();
-    git(env.here, "checkout", "--quiet", "-b", "release", `${BRANCH}~1`);
-    git(env.here, "commit", "--quiet", "--allow-empty", "--message", "new release");
-    git(env.here, "rebase", "--quiet", "--onto", "release", `${BRANCH}~1`, BRANCH);
+    await env.moveOntoNewRelease();
     const rebased = env.head();
 
     expect(env.catchUp()).toMatchObject({ status: 0, stdout: fork });
     expect(env.head()).toBe(rebased);
   });
 
+  it("keeps fixes committed or amended after that rebase", async () => {
+    const env = await setup();
+    const fork = env.head();
+    await env.moveOntoNewRelease();
+    git(env.here, "commit", "--quiet", "--allow-empty", "--message", "fix the checks");
+    git(
+      env.here,
+      "commit",
+      "--quiet",
+      "--allow-empty",
+      "--amend",
+      "--message",
+      "fix the checks again",
+    );
+
+    expect(env.catchUp()).toMatchObject({ status: 0, stdout: fork });
+  });
+
+  it("keeps a conflicted rebase that was continued by hand", async () => {
+    const env = await setup();
+    const fork = env.head();
+    expect(await env.moveOntoNewRelease("new release\n")).not.toBe(0);
+    await NodeFSP.writeFile(NodePath.join(env.here, "settings"), "both\n");
+    git(env.here, "add", "settings");
+    NodeChildProcess.execFileSync("git", ["rebase", "--continue"], {
+      cwd: env.here,
+      env: { ...ENV, GIT_EDITOR: "true" },
+    });
+
+    expect(env.catchUp()).toMatchObject({ status: 0, stdout: fork });
+  });
+
   it("refuses an unpushed rebase once the fork has moved on", async () => {
     const env = await setup();
-    git(env.here, "checkout", "--quiet", "-b", "release", `${BRANCH}~1`);
-    git(env.here, "commit", "--quiet", "--allow-empty", "--message", "new release");
-    git(env.here, "rebase", "--quiet", "--onto", "release", `${BRANCH}~1`, BRANCH);
+    await env.moveOntoNewRelease();
     const merged = env.mergeIntoFork("merged PR");
 
     const run = env.catchUp();
