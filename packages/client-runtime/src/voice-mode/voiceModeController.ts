@@ -411,10 +411,15 @@ export class VoiceModeController<Audio = Float32Array> {
         this.refresh();
       },
       onUtterance: (audio) => {
-        if (run !== this.run || this.current.power !== "on") return;
-        this.releaseUserDuckingAfterSilence();
+        if (run !== this.run) return;
         this.soundStarted = false;
         this.speechConfirmed = false;
+        if (this.current.power !== "on") {
+          this.duckForUser = false;
+          this.dependencies.speaker.resume();
+          return;
+        }
+        this.releaseUserDuckingAfterSilence();
         this.utterances.push({ audio, replyAtStart: this.replyAtSpeechStart });
         void this.transcribeUtterances(run);
       },
