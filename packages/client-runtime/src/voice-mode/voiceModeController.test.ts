@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { createReplyReader } from "./replyReader.ts";
 import {
   VoiceModeController,
   VoiceModeError,
@@ -169,6 +170,7 @@ class StubComposer implements VoiceModeTarget {
   watchReplies: VoiceModeTarget["watchReplies"] = (handlers, { includeReplyInProgress }) => {
     this.replies = handlers;
     if (includeReplyInProgress && this.replyInProgress) {
+      handlers.onMessageQueued(this.replyInProgress.messageId);
       handlers.onSentence(this.replyInProgress.messageId, this.replyInProgress.sentence);
     }
     return () => {
@@ -176,7 +178,11 @@ class StubComposer implements VoiceModeTarget {
     };
   };
 
+  replyReader() {
+    return createReplyReader(this.replies!, { includeReplyInProgress: false });
+  }
   reply(messageId: string, sentence: string): void {
+    this.replies?.onMessageQueued(messageId);
     this.replies?.onSentence(messageId, sentence);
   }
   endReply(messageId: string): void {
@@ -986,13 +992,31 @@ describe("VoiceModeController", () => {
 
     it("stops the reply when the user talks over it, and does not say the rest of it", async () => {
       const { composer, speaker, say } = await setUpOn();
-      composer.reply("message-1", "I found the bug.");
+      const reader = composer.replyReader();
+      const first = {
+        item: {
+          id: "message-1",
+          type: "assistant_message",
+          text: "I found the bug. Still looking",
+          streaming: true,
+        },
+      };
+      const second = {
+        item: { id: "message-2", type: "assistant_message", text: "An old follow-up." },
+      };
+      reader.read([]);
+      reader.read([first, second]);
 
       await say("actually, check the config first");
-      composer.reply("message-1", "It is in the parser.");
+      reader.read([
+        first,
+        second,
+        {
+          item: { id: "message-3", type: "assistant_message", text: "I’ll check the config." },
+        },
+      ]);
 
-      expect(speaker.isActive()).toBe(false);
-      expect(speaker.said).toEqual(["I found the bug."]);
+      expect(speaker.said).toEqual(["I found the bug.", "I’ll check the config."]);
       expect(composer.draft).toBe("actually, check the config first");
     });
 

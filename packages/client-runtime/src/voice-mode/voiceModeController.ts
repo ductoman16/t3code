@@ -85,6 +85,8 @@ export interface VoiceModeSpeaker {
 }
 
 export interface ReplyHandlers {
+  readonly onMessageQueued: (messageId: string) => void;
+  readonly isMessageCutOff: (messageId: string) => boolean;
   readonly onSentence: (messageId: string, sentence: string) => void;
   readonly onMessageEnd: (messageId: string) => void;
 }
@@ -219,6 +221,7 @@ export class VoiceModeController<Audio = Float32Array> {
    * mode goes off: a model told so is owed the news that it ended.
    */
   private readonly spokenTo = new Map<string, number>();
+  private readonly pendingReplies = new Set<string>();
   private readonly repliesBeingSaid = new Set<string>();
   /** Replies the user talked over; the rest of each is not said. */
   private readonly repliesCutOff = new Set<string>();
@@ -368,6 +371,8 @@ export class VoiceModeController<Audio = Float32Array> {
     this.stopWatchingReplies =
       this.target?.watchReplies(
         {
+          onMessageQueued: (messageId) => this.pendingReplies.add(messageId),
+          isMessageCutOff: (messageId) => this.repliesCutOff.has(messageId),
           onSentence: (messageId, sentence) => {
             if (this.current.power !== "on" || this.repliesCutOff.has(messageId)) return;
             this.awaitingReply = false;
@@ -375,6 +380,7 @@ export class VoiceModeController<Audio = Float32Array> {
             this.dependencies.speaker.say(sentence);
           },
           onMessageEnd: (messageId) => {
+            this.pendingReplies.delete(messageId);
             this.repliesBeingSaid.delete(messageId);
             this.repliesCutOff.delete(messageId);
             this.updateDucking(this.current.power);
@@ -481,7 +487,8 @@ export class VoiceModeController<Audio = Float32Array> {
   }
 
   private cutOffSpeech(): void {
-    for (const messageId of this.repliesBeingSaid) this.repliesCutOff.add(messageId);
+    for (const messageId of this.pendingReplies) this.repliesCutOff.add(messageId);
+    this.pendingReplies.clear();
     this.repliesBeingSaid.clear();
     this.dependencies.speaker.stop();
   }
@@ -574,6 +581,7 @@ export class VoiceModeController<Audio = Float32Array> {
     this.utterances = [];
     this.spokenDraft = null;
     this.awaitingReply = false;
+    this.pendingReplies.clear();
     this.repliesBeingSaid.clear();
     this.repliesCutOff.clear();
     this.dependencies.speaker.shutDown();
