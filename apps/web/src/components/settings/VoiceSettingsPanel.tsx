@@ -1,3 +1,4 @@
+import { VOICE_MODE_SPEEDS } from "@t3tools/client-runtime/voice-mode";
 import { thrownErrorMessage } from "@t3tools/client-runtime/errors";
 import { m } from "~/i18n/messages";
 import {
@@ -128,11 +129,7 @@ import { Textarea } from "../ui/textarea";
 import { toastManager } from "../ui/toast";
 import { MicrophoneOrderList } from "./MicrophoneOrderList";
 import { MicrophoneTest } from "./MicrophoneTest";
-import {
-  updateVoiceModeSettings,
-  useVoiceModeSettings,
-  VOICE_MODE_SPEEDS,
-} from "../../voiceMode/voiceModeSettings";
+import { updateVoiceModeSettings, useVoiceModeSettings } from "../../voiceMode/voiceModeSettings";
 import { CloudVoiceConfiguration } from "./CloudVoiceConfiguration";
 import { ModelBenchmarks, orderSpeechLanguages } from "./SpeechModelComparison";
 import { languageLabel, SpeechLanguageSelect } from "./SpeechLanguageSelect";
