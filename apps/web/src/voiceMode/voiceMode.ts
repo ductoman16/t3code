@@ -59,6 +59,16 @@ voiceMode.subscribe(() => {
 
 watchVoiceModeChimes(voiceMode, playVoiceModeChime);
 
+// Other audio is turned down while either side of the call is talking.
+let ducking = false;
+voiceMode.subscribe(() => {
+  const { power, activity } = voiceMode.state;
+  const next = power === "on" && (activity === "hearing" || activity === "speaking");
+  if (next === ducking) return;
+  ducking = next;
+  void window.desktopBridge?.setVoiceAudioDucking(next).catch(() => undefined);
+});
+
 // Marked in session storage while voice mode runs. A page that crashed or reloaded mid-call cannot
 // chime, so the page that replaces it in the same window chimes the stop instead.
 const RUNNING_KEY = "t3code:voice-mode-running";

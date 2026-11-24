@@ -120,6 +120,8 @@ contextBridge.exposeInMainWorld("desktopBridge", {
   restartAudioService: () => ipcRenderer.invoke(IpcChannels.RESTART_AUDIO_SERVICE_CHANNEL),
   setNotificationBadge: (badge) =>
     ipcRenderer.invoke(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, badge),
+  setVoiceAudioDucking: (ducked) =>
+    ipcRenderer.invoke(IpcChannels.SET_VOICE_AUDIO_DUCKING_CHANNEL, ducked),
   onNotificationBadgeClear: (listener) => {
     const handler = () => listener();
     ipcRenderer.on(IpcChannels.SET_NOTIFICATION_BADGE_CHANNEL, handler);
