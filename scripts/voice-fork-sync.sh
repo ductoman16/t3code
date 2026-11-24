@@ -63,6 +63,20 @@ fi
 [ "$(git branch --show-current)" = "$BRANCH" ] || fail "check out $BRANCH first"
 [ -z "$(git status --porcelain --untracked-files=no)" ] || fail "commit or stash the changes in $REPO first"
 
+# The push below replaces the fork's branch, so this one must hold everything the fork has: catch up
+# when it is only behind, and refuse when they diverged, unless this branch moved off the fork's tip
+# itself, as an unpushed move onto a new release does.
+git fetch --quiet origin "$BRANCH"
+pushed=$(git rev-parse FETCH_HEAD)
+if git merge-base --is-ancestor "$pushed" HEAD; then
+  :
+elif git merge-base --is-ancestor HEAD "$pushed"; then
+  echo "voice-fork-sync: catching up with the fork's $BRANCH (${pushed:0:10})"
+  git merge --ff-only --quiet "$pushed"
+elif ! git rev-list --walk-reflogs "$BRANCH" | grep -x "$pushed" >/dev/null; then
+  fail "$BRANCH and the fork's $BRANCH (${pushed:0:10}) have diverged; merge or rebase onto it first"
+fi
+
 git fetch --quiet upstream --tags
 latest=$(git tag -l 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
 base=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' HEAD)
@@ -112,7 +126,7 @@ codesign --force --deep --sign "$SIGNING_IDENTITY" "$STAGED"
 codesign --verify --deep --strict "$STAGED"
 echo "$head" >"$STAGED_COMMIT"
 
-git push --force-with-lease origin "$BRANCH"
+git push --force-with-lease="$BRANCH:$pushed" origin "$BRANCH"
 
 if app_running; then
   if [ -f "$WAITER_PID" ] && kill -0 "$(cat "$WAITER_PID")" 2>/dev/null; then
