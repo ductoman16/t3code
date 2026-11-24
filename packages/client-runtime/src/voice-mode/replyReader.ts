@@ -11,7 +11,7 @@ export interface TimelineItem {
   };
 }
 
-// A reply being read is among the newest items; older ones are not searched on every text delta.
+// New replies are usually near the end, so only look for new IDs there.
 const NEWEST_ITEMS = 40;
 
 interface AssistantMessage {
@@ -45,6 +45,7 @@ export function createReplyReader(
   const begin = (message: AssistantMessage) => {
     seen.add(message.id);
     reading.set(message.id, createSpeechChunker());
+    handlers.onMessageQueued(message.id);
   };
 
   return {
@@ -66,13 +67,17 @@ export function createReplyReader(
       for (const message of newest) seen.add(message.id);
 
       for (const [id, chunker] of reading) {
-        const message = newest.find((candidate) => candidate.id === id);
-        if (message) {
-          for (const sentence of chunker.push(message.text)) handlers.onSentence(id, sentence);
-          if (message.streaming) continue;
-          for (const sentence of chunker.finish(message.text)) handlers.onSentence(id, sentence);
+        const message =
+          newest.find((candidate) => candidate.id === id) ??
+          items.find(({ item }) => item.id === id && item.type === "assistant_message")?.item;
+        if (message && !handlers.isMessageCutOff(id)) {
+          const text = message.text ?? "";
+          for (const sentence of chunker.push(text)) handlers.onSentence(id, sentence);
+          // A later message can finish while this one's last sentence is still streaming.
+          if (message.streaming) break;
+          for (const sentence of chunker.finish(text)) handlers.onSentence(id, sentence);
         }
-        // Finished, or gone from the timeline: either way nothing more of it will be said.
+        // Finished, cut off, or gone from the timeline.
         reading.delete(id);
         handlers.onMessageEnd(id);
       }
