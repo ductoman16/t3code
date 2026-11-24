@@ -85,6 +85,8 @@ export interface VoiceModeSpeaker {
 }
 
 export interface ReplyHandlers {
+  readonly onMessageQueued: (messageId: string) => void;
+  readonly isMessageCutOff: (messageId: string) => boolean;
   readonly onSentence: (messageId: string, sentence: string) => void;
   readonly onMessageEnd: (messageId: string) => void;
 }
@@ -125,6 +127,11 @@ export interface VoiceModeDependencies<Audio = Float32Array> {
   readonly createSpeechSource: (handlers: SpeechSourceHandlers<Audio>) => SpeechSource;
   readonly transcriber: VoiceModeTranscriber<Audio>;
   readonly speaker: VoiceModeSpeaker;
+  readonly audioDucking?: {
+    readonly setDucked: (ducked: boolean) => void;
+    /** Additional quiet after the speech detector has closed an utterance. */
+    readonly releaseAfterUtteranceMs: number;
+  };
   /** Runs `run` once after `delayMs`; the returned function cancels it. */
   readonly schedule: (delayMs: number, run: () => void) => () => void;
   /** Read each time it is needed, so a changed setting applies to the next phrase. */
@@ -195,6 +202,9 @@ export class VoiceModeController<Audio = Float32Array> {
   private conversationThread: string | null = null;
   private stopWatchingReplies: (() => void) | null = null;
 
+  private ducked = false;
+  private duckForUser = false;
+  private cancelDuckingRelease: (() => void) | null = null;
   private soundStarted = false;
   private speechConfirmed = false;
   private replyAtSpeechStart = "";
@@ -207,10 +217,11 @@ export class VoiceModeController<Audio = Float32Array> {
   /** A message voice mode sent has not been answered yet. */
   private awaitingReply = false;
   /**
-   * Threads whose model was last told the conversation is spoken. Kept when voice mode goes off:
-   * a model told so is owed the news that it ended.
+   * The run in which each thread's model was last told the conversation is spoken. Kept when voice
+   * mode goes off: a model told so is owed the news that it ended.
    */
-  private readonly spokenTo = new Set<string>();
+  private readonly spokenTo = new Map<string, number>();
+  private readonly pendingReplies = new Set<string>();
   private readonly repliesBeingSaid = new Set<string>();
   /** Replies the user talked over; the rest of each is not said. */
   private readonly repliesCutOff = new Set<string>();
@@ -299,13 +310,16 @@ export class VoiceModeController<Audio = Float32Array> {
    */
   noteMessage(thread: string, text: string): { readonly text: string; readonly sent: () => void } {
     const on = this.current.power === "on";
+    const run = this.run;
+    // Hours of other turns, or a provider switch, can pass while off; each call is announced afresh.
+    const told = on ? this.spokenTo.get(thread) === run : this.spokenTo.has(thread);
     // An empty message has nothing to carry the note, and a command must stay a command.
-    if (text.trim() === "" || text.trimStart().startsWith("/") || on === this.spokenTo.has(thread))
+    if (text.trim() === "" || text.trimStart().startsWith("/") || on === told)
       return { text, sent: () => {} };
     return {
       text: on ? withVoiceModeInstructions(text) : withVoiceModeEnded(text),
       sent: () => {
-        if (on) this.spokenTo.add(thread);
+        if (on) this.spokenTo.set(thread, run);
         else this.spokenTo.delete(thread);
       },
     };
@@ -357,6 +371,8 @@ export class VoiceModeController<Audio = Float32Array> {
     this.stopWatchingReplies =
       this.target?.watchReplies(
         {
+          onMessageQueued: (messageId) => this.pendingReplies.add(messageId),
+          isMessageCutOff: (messageId) => this.repliesCutOff.has(messageId),
           onSentence: (messageId, sentence) => {
             if (this.current.power !== "on" || this.repliesCutOff.has(messageId)) return;
             this.awaitingReply = false;
@@ -364,8 +380,10 @@ export class VoiceModeController<Audio = Float32Array> {
             this.dependencies.speaker.say(sentence);
           },
           onMessageEnd: (messageId) => {
+            this.pendingReplies.delete(messageId);
             this.repliesBeingSaid.delete(messageId);
             this.repliesCutOff.delete(messageId);
+            this.updateDucking(this.current.power);
           },
         },
         { includeReplyInProgress: this.awaitingReply },
@@ -376,6 +394,8 @@ export class VoiceModeController<Audio = Float32Array> {
     return {
       onSpeechStart: () => {
         if (run !== this.run) return;
+        this.cancelDuckingRelease?.();
+        this.cancelDuckingRelease = null;
         this.soundStarted = true;
         this.replyAtSpeechStart = this.dependencies.speaker.recentText();
         this.cancelSend();
@@ -383,12 +403,14 @@ export class VoiceModeController<Audio = Float32Array> {
       },
       onSpeechConfirmed: () => {
         if (run !== this.run) return;
+        this.duckForUser = true;
         this.speechConfirmed = true;
         this.dependencies.speaker.pause();
         this.refresh();
       },
       onSpeechCancel: () => {
         if (run !== this.run) return;
+        this.releaseUserDuckingAfterSilence();
         this.soundStarted = false;
         this.speechConfirmed = false;
         this.dependencies.speaker.resume();
@@ -396,9 +418,15 @@ export class VoiceModeController<Audio = Float32Array> {
         this.refresh();
       },
       onUtterance: (audio) => {
-        if (run !== this.run || this.current.power !== "on") return;
+        if (run !== this.run) return;
         this.soundStarted = false;
         this.speechConfirmed = false;
+        if (this.current.power !== "on") {
+          this.duckForUser = false;
+          this.dependencies.speaker.resume();
+          return;
+        }
+        this.releaseUserDuckingAfterSilence();
         this.utterances.push({ audio, replyAtStart: this.replyAtSpeechStart });
         void this.transcribeUtterances(run);
       },
@@ -459,7 +487,8 @@ export class VoiceModeController<Audio = Float32Array> {
   }
 
   private cutOffSpeech(): void {
-    for (const messageId of this.repliesBeingSaid) this.repliesCutOff.add(messageId);
+    for (const messageId of this.pendingReplies) this.repliesCutOff.add(messageId);
+    this.pendingReplies.clear();
     this.repliesBeingSaid.clear();
     this.dependencies.speaker.stop();
   }
@@ -512,6 +541,27 @@ export class VoiceModeController<Audio = Float32Array> {
     this.setState({ ...OFF, error: describe(error) });
   }
 
+  private releaseUserDuckingAfterSilence(): void {
+    const ducking = this.dependencies.audioDucking;
+    if (!ducking || !this.duckForUser || this.cancelDuckingRelease) return;
+    this.cancelDuckingRelease = this.dependencies.schedule(ducking.releaseAfterUtteranceMs, () => {
+      this.cancelDuckingRelease = null;
+      this.duckForUser = false;
+      this.updateDucking(this.current.power);
+    });
+  }
+
+  private updateDucking(power: VoiceModeState["power"]): void {
+    const ducking = this.dependencies.audioDucking;
+    if (!ducking) return;
+    const next =
+      power === "on" &&
+      (this.duckForUser || this.repliesBeingSaid.size > 0 || this.dependencies.speaker.isActive());
+    if (this.ducked === next) return;
+    this.ducked = next;
+    ducking.setDucked(next);
+  }
+
   private halt(): void {
     this.run += 1;
     this.abort?.abort();
@@ -523,11 +573,15 @@ export class VoiceModeController<Audio = Float32Array> {
     this.conversationThread = null;
     this.stopListeningToSpeaker?.();
     this.stopListeningToSpeaker = null;
+    this.cancelDuckingRelease?.();
+    this.cancelDuckingRelease = null;
+    this.duckForUser = false;
     this.soundStarted = false;
     this.speechConfirmed = false;
     this.utterances = [];
     this.spokenDraft = null;
     this.awaitingReply = false;
+    this.pendingReplies.clear();
     this.repliesBeingSaid.clear();
     this.repliesCutOff.clear();
     this.dependencies.speaker.shutDown();
@@ -554,6 +608,7 @@ export class VoiceModeController<Audio = Float32Array> {
   }
 
   private setState(next: VoiceModeState): void {
+    this.updateDucking(next.power);
     const previous = this.current;
     if (
       previous.power === next.power &&

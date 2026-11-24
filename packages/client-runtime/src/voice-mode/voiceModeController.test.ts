@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
+import { createReplyReader } from "./replyReader.ts";
 import {
   VoiceModeController,
   VoiceModeError,
@@ -169,6 +170,7 @@ class StubComposer implements VoiceModeTarget {
   watchReplies: VoiceModeTarget["watchReplies"] = (handlers, { includeReplyInProgress }) => {
     this.replies = handlers;
     if (includeReplyInProgress && this.replyInProgress) {
+      handlers.onMessageQueued(this.replyInProgress.messageId);
       handlers.onSentence(this.replyInProgress.messageId, this.replyInProgress.sentence);
     }
     return () => {
@@ -176,7 +178,11 @@ class StubComposer implements VoiceModeTarget {
     };
   };
 
+  replyReader() {
+    return createReplyReader(this.replies!, { includeReplyInProgress: false });
+  }
   reply(messageId: string, sentence: string): void {
+    this.replies?.onMessageQueued(messageId);
     this.replies?.onSentence(messageId, sentence);
   }
   endReply(messageId: string): void {
@@ -209,7 +215,9 @@ function setUp() {
   const transcriber = new StubTranscriber();
   const speaker = new StubSpeaker();
   const clock = new StubClock();
+  const ducking: boolean[] = [];
   const controller = new VoiceModeController({
+    audioDucking: { setDucked: (active) => ducking.push(active), releaseAfterUtteranceMs: 900 },
     createSpeechSource: microphone.create,
     transcriber,
     speaker,
@@ -227,7 +235,17 @@ function setUp() {
     await transcriber.answer(transcript);
   };
 
-  return { microphone, transcriber, speaker, clock, composer, leaveComposer, controller, say };
+  return {
+    microphone,
+    transcriber,
+    speaker,
+    clock,
+    composer,
+    leaveComposer,
+    controller,
+    say,
+    ducking,
+  };
 }
 
 async function setUpOn() {
@@ -360,6 +378,79 @@ describe("VoiceModeController", () => {
 
       expect(composer.draft).toBe("");
       expect(composer.sent).toEqual([]);
+    });
+  });
+
+  describe("audio ducking", () => {
+    it("releases a phrase that ends before the voice finishes preparing", async () => {
+      const { microphone, speaker, controller, ducking, clock } = setUp();
+      const ready = Promise.withResolvers<void>();
+      speaker.prepare = () => ready.promise;
+      const starting = controller.turnOn();
+      await settle();
+      microphone.handlers!.onSpeechStart();
+      microphone.handlers!.onSpeechConfirmed();
+      microphone.handlers!.onUtterance(AUDIO);
+      ready.resolve();
+      await starting;
+      clock.advance(900);
+      expect(ducking).toEqual([]);
+      expect(speaker.paused).toBe(false);
+    });
+
+    it("holds across a breath and cancels release at the first sound of resumed speech", async () => {
+      const { microphone, clock, ducking } = await setUpOn();
+      const mic = microphone.handlers!;
+      mic.onSpeechStart();
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      clock.advance(899);
+      expect(ducking).toEqual([true]);
+
+      mic.onSpeechStart();
+      clock.advance(200);
+      expect(ducking).toEqual([true]);
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      clock.advance(899);
+      expect(ducking).toEqual([true]);
+      clock.advance(1);
+      expect(ducking).toEqual([true, false]);
+    });
+
+    it("holds through a reply overlapping transcription and releases immediately on hang-up", async () => {
+      const { controller, microphone, composer, speaker, clock, ducking } = await setUpOn();
+      const mic = microphone.handlers!;
+      mic.onSpeechStart();
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      composer.reply("m1", "Here.");
+      clock.advance(900);
+      expect(ducking).toEqual([true]);
+      speaker.finishSpeaking();
+      clock.advance(3_000);
+      expect(ducking).toEqual([true]);
+      composer.reply("m1", "One more sentence.");
+      composer.endReply("m1");
+      expect(ducking).toEqual([true]);
+      speaker.finishSpeaking();
+      expect(ducking).toEqual([true, false]);
+
+      mic.onSpeechStart();
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      composer.reply("m2", "Another.");
+      speaker.finishSpeaking();
+      expect(ducking).toEqual([true, false, true]);
+      controller.turnOff();
+      expect(ducking).toEqual([true, false, true, false]);
+      await controller.turnOn();
+      composer.reply("m3", "Hello.");
+      clock.advance(900);
+      expect(ducking).toEqual([true, false, true, false, true]);
+      speaker.finishSpeaking();
+      composer.endReply("m3");
+      expect(ducking).toEqual([true, false, true, false, true, false]);
     });
   });
 
@@ -764,8 +855,8 @@ describe("VoiceModeController", () => {
       expect(composer.sent).toEqual(["run the tests"]);
     });
 
-    it("says nothing when voice mode is back on before anything was typed", async () => {
-      const { controller, composer, clock, say } = await setUpOn();
+    it("tells the agent again when voice mode is back on before anything was typed", async () => {
+      const { controller, composer, clock, say, transcriber } = await setUpOn();
       await say("run the tests");
       clock.advance(SEND_AFTER_SILENCE_MS);
 
@@ -774,7 +865,20 @@ describe("VoiceModeController", () => {
       await say("run them again");
       clock.advance(SEND_AFTER_SILENCE_MS);
 
-      expect(composer.sent).toEqual([withVoiceModeInstructions("run the tests"), "run them again"]);
+      controller.turnOff();
+      await controller.turnOn();
+      controller.turnOff();
+      transcriber.checkFailure = new VoiceModeError({ message: "No microphone." });
+      await controller.turnOn();
+      composer.type("now fix the parser");
+      composer.type("and the lexer");
+
+      expect(composer.sent).toEqual([
+        withVoiceModeInstructions("run the tests"),
+        withVoiceModeInstructions("run them again"),
+        withVoiceModeEnded("now fix the parser"),
+        "and the lexer",
+      ]);
     });
 
     it("tells the agent again when voice mode comes back after it was told it ended", async () => {
@@ -888,13 +992,31 @@ describe("VoiceModeController", () => {
 
     it("stops the reply when the user talks over it, and does not say the rest of it", async () => {
       const { composer, speaker, say } = await setUpOn();
-      composer.reply("message-1", "I found the bug.");
+      const reader = composer.replyReader();
+      const first = {
+        item: {
+          id: "message-1",
+          type: "assistant_message",
+          text: "I found the bug. Still looking",
+          streaming: true,
+        },
+      };
+      const second = {
+        item: { id: "message-2", type: "assistant_message", text: "An old follow-up." },
+      };
+      reader.read([]);
+      reader.read([first, second]);
 
       await say("actually, check the config first");
-      composer.reply("message-1", "It is in the parser.");
+      reader.read([
+        first,
+        second,
+        {
+          item: { id: "message-3", type: "assistant_message", text: "I’ll check the config." },
+        },
+      ]);
 
-      expect(speaker.isActive()).toBe(false);
-      expect(speaker.said).toEqual(["I found the bug."]);
+      expect(speaker.said).toEqual(["I found the bug.", "I’ll check the config."]);
       expect(composer.draft).toBe("actually, check the config first");
     });
 

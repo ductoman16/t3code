@@ -13,6 +13,8 @@ function setUp(options = { includeReplyInProgress: false }) {
   const events: string[] = [];
   const reader = createReplyReader(
     {
+      onMessageQueued: () => {},
+      isMessageCutOff: () => false,
       onSentence: (messageId, sentence) => events.push(`${messageId}: ${sentence}`),
       onMessageEnd: (messageId) => events.push(`${messageId} ended`),
     },
@@ -73,19 +75,25 @@ describe("createReplyReader", () => {
     const { events, reader } = setUp();
     reader.read([]);
 
-    reader.read([assistant("a1", "Looking at the parser.")]);
-    reader.read([
-      assistant("a1", "Looking at the parser."),
-      other("c1", "command_execution"),
-      assistant("a2", "Fixed it.", true),
-    ]);
-    reader.read([
-      assistant("a1", "Looking at the parser."),
-      other("c1", "command_execution"),
-      assistant("a2", "Fixed it.", false),
-    ]);
+    const first = assistant("a1", "I found the cause. I haven’t verified dev", true);
+    const second = assistant("a2", "The service is responsive.");
+    const third = assistant("a3", "I recommend reserving memory.");
+    reader.read([first]);
+    reader.read([first, second]);
+    reader.read([first, second, third]);
+    expect(events).toEqual(["a1: I found the cause."]);
 
-    expect(events).toEqual(["a1: Looking at the parser.", "a1 ended", "a2: Fixed it.", "a2 ended"]);
+    reader.read([assistant("a1", "I found the cause. I haven’t verified dev"), second, third]);
+
+    expect(events).toEqual([
+      "a1: I found the cause.",
+      "a1: I haven’t verified dev",
+      "a1 ended",
+      "a2: The service is responsive.",
+      "a2 ended",
+      "a3: I recommend reserving memory.",
+      "a3 ended",
+    ]);
   });
 
   it("stays silent about a message streaming when reading began, unless asked to include it", () => {
@@ -109,13 +117,37 @@ describe("createReplyReader", () => {
     expect(events).toEqual([]);
   });
 
+  it("keeps queued messages in order after they leave the discovery window", () => {
+    const { events, reader } = setUp();
+    const first = assistant("a1", "Still thinking", true);
+    const second = assistant("a2", "Next reply.");
+    const tools = Array.from({ length: 40 }, (_, index) =>
+      other(`tool-${index}`, "command_execution"),
+    );
+    reader.read([]);
+    reader.read([first, second]);
+    reader.read([first, second, ...tools]);
+    expect(events).toEqual([]);
+
+    reader.read([assistant("a1", "Still thinking. Ready now."), second, ...tools]);
+    expect(events).toEqual([
+      "a1: Still thinking.",
+      "a1: Ready now.",
+      "a1 ended",
+      "a2: Next reply.",
+      "a2 ended",
+    ]);
+  });
+
   it("reports the end of a message that disappears while streaming", () => {
     const { events, reader } = setUp();
     reader.read([]);
     reader.read([assistant("a1", "I am about to", true)]);
 
-    reader.read([]);
+    const second = assistant("a2", "Next reply.");
+    reader.read([assistant("a1", "I am about to", true), second]);
+    reader.read([second]);
 
-    expect(events).toEqual(["a1 ended"]);
+    expect(events).toEqual(["a1 ended", "a2: Next reply.", "a2 ended"]);
   });
 });
