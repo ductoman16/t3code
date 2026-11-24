@@ -1,8 +1,8 @@
 #!/bin/bash
 # Makes sure force-pushing the checked-out branch cannot rewind the fork's copy, then prints the
 # fork's tip for the push's lease. A branch that is only behind catches up. A branch whose latest
-# rebase started at the fork's tip (an unpushed move onto a new release, perhaps with fixes since)
-# is kept as it is. Anything else has diverged and fails.
+# rebase started from a commit holding the fork's tip (an unpushed move onto a new release, perhaps
+# with fixes since) is kept as it is. Anything else has diverged and fails.
 #
 #   scripts/voice-fork-catch-up.sh <branch>
 set -euo pipefail
@@ -23,7 +23,7 @@ if git merge-base --is-ancestor "$fork" "$head"; then
 elif git merge-base --is-ancestor "$head" "$fork"; then
   echo "voice-fork-sync: catching up with the fork's $branch (${fork:0:10})" >&2
   git merge --ff-only --quiet "$fork"
-elif [ "$(rebased_from)" = "$fork" ]; then
+elif from=$(rebased_from) && [ -n "$from" ] && git merge-base --is-ancestor "$fork" "$from"; then
   :
 else
   echo "voice-fork-sync: $branch (${head:0:10}) and the fork's $branch (${fork:0:10}) have diverged." >&2

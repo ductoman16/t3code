@@ -47,6 +47,7 @@ async function setup() {
   git(root, "clone", "--quiet", fork, "elsewhere");
   const here = NodePath.join(root, "here");
   const elsewhere = NodePath.join(root, "elsewhere");
+  const release = git(here, "rev-parse", `${BRANCH}~1`);
   return {
     here,
     /** A PR merging into the fork from another checkout. */
@@ -64,15 +65,16 @@ async function setup() {
       });
       return { status: run.status, stdout: run.stdout.trim(), stderr: run.stderr };
     },
+    release,
     head: () => git(here, "rev-parse", "HEAD"),
     /** Moves this branch onto a new release, as the sync does, without pushing it. */
     async moveOntoNewRelease(releaseSettings = "release\n") {
-      git(here, "checkout", "--quiet", "-b", "release", `${BRANCH}~1`);
+      git(here, "checkout", "--quiet", "-B", "new-release", release);
       await NodeFSP.writeFile(NodePath.join(here, "settings"), releaseSettings);
       git(here, "commit", "--quiet", "--allow-empty", "--all", "--message", "new release");
       return NodeChildProcess.spawnSync(
         "git",
-        ["rebase", "--quiet", "--onto", "release", `${BRANCH}~1`, BRANCH],
+        ["rebase", "--quiet", "--onto", "new-release", release, BRANCH],
         { cwd: here, env: ENV },
       ).status;
     },
@@ -124,6 +126,25 @@ describe("voice-fork-catch-up.sh", () => {
     );
 
     expect(env.catchUp()).toMatchObject({ status: 0, stdout: fork });
+  });
+
+  it("keeps an unpushed rebase that carried local commits along", async () => {
+    const env = await setup();
+    const fork = env.head();
+    git(env.here, "commit", "--quiet", "--allow-empty", "--message", "local work");
+    await env.moveOntoNewRelease();
+
+    expect(env.catchUp()).toMatchObject({ status: 0, stdout: fork });
+  });
+
+  it("judges only by the latest rebase", async () => {
+    const env = await setup();
+    await env.moveOntoNewRelease();
+    git(env.here, "reset", "--quiet", "--hard", env.release);
+    git(env.here, "commit", "--quiet", "--allow-empty", "--message", "work on an old commit");
+    await env.moveOntoNewRelease();
+
+    expect(env.catchUp().status).toBe(1);
   });
 
   it("keeps a conflicted rebase that was continued by hand", async () => {
