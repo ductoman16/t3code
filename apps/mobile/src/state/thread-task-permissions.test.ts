@@ -92,6 +92,9 @@ vi.mock("react", () => ({
   ],
 }));
 vi.mock("expo-crypto", () => ({ randomUUID: () => "uuid" }));
+vi.mock("../features/voice-mode/voiceMode", () => ({
+  noteVoiceModeMessage: (_threadKey: string, text: string) => ({ text, sent: () => {} }),
+}));
 vi.mock("gt-react-native", async (importOriginal) => {
   const gt = await importOriginal<typeof import("gt-react-native")>();
   return {
