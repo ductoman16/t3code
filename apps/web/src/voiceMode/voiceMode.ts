@@ -14,7 +14,7 @@ import {
   type TranscriptionDestination,
 } from "./environmentTranscriber";
 import { createKokoroSpeaker } from "./kokoroSpeaker";
-import { createMicrophoneSpeechSource } from "./microphoneSpeechSource";
+import { createMicrophoneSpeechSource, UTTERANCE_END_SILENCE_MS } from "./microphoneSpeechSource";
 import {
   createReplyReader,
   VoiceModeController,
@@ -28,12 +28,20 @@ import { readVoiceModeSettings } from "./voiceModeSettings";
 // Resolved by a hook, so the composer publishes it here for the controller to read.
 let transcriptionDestination: TranscriptionDestination | null = null;
 
+const desktop = window.desktopBridge;
+
 /** One voice mode for the whole window: it follows whichever composer is on screen. */
 const voiceMode = new VoiceModeController({
   createSpeechSource: (handlers) =>
     createMicrophoneSpeechSource(handlers, { chooseMicrophone: chooseRecordingMicrophone }),
   transcriber: createEnvironmentTranscriber(() => transcriptionDestination),
   speaker: createKokoroSpeaker(readVoiceModeSettings),
+  ...(desktop && {
+    audioDucking: {
+      setDucked: (ducked) => void desktop.setVoiceAudioDucking(ducked).catch(() => undefined),
+      releaseAfterUtteranceMs: 1_500 - UTTERANCE_END_SILENCE_MS,
+    },
+  }),
   schedule: (delayMs, run) => {
     const timer = setTimeout(run, delayMs);
     return () => clearTimeout(timer);
@@ -58,16 +66,6 @@ voiceMode.subscribe(() => {
 });
 
 watchVoiceModeChimes(voiceMode, playVoiceModeChime);
-
-// Other audio is turned down while either side of the call is talking.
-let ducking = false;
-voiceMode.subscribe(() => {
-  const { power, activity } = voiceMode.state;
-  const next = power === "on" && (activity === "hearing" || activity === "speaking");
-  if (next === ducking) return;
-  ducking = next;
-  void window.desktopBridge?.setVoiceAudioDucking(next).catch(() => undefined);
-});
 
 // Marked in session storage while voice mode runs. A page that crashed or reloaded mid-call cannot
 // chime, so the page that replaces it in the same window chimes the stop instead.

@@ -9,6 +9,7 @@ const START_DELAY_SECONDS = 0.03;
 interface Sentence {
   readonly text: string;
   source: AudioBufferSourceNode | null;
+  drainTimer?: ReturnType<typeof setTimeout>;
 }
 
 /**
@@ -44,11 +45,16 @@ export function createKokoroSpeaker(
     const source = context.createBufferSource();
     source.buffer = buffer;
     source.connect(context.destination);
+    const audioContext = context;
     source.addEventListener("ended", () => {
       if (sentence.source !== source) return;
-      sentences.delete(response.id);
-      recent.push({ text: sentence.text, endedAt: performance.now() });
-      notify();
+      // "ended" marks the last rendered sample; the system and Bluetooth device can still be playing it.
+      const latencyMs = 1_000 * (audioContext.baseLatency + audioContext.outputLatency);
+      sentence.drainTimer = setTimeout(() => {
+        sentences.delete(response.id);
+        recent.push({ text: sentence.text, endedAt: performance.now() });
+        notify();
+      }, latencyMs);
     });
     sentence.source = source;
     const startAt = Math.max(context.currentTime + START_DELAY_SECONDS, playhead);
@@ -60,6 +66,7 @@ export function createKokoroSpeaker(
     generation += 1;
     send({ type: "forget", generation });
     for (const sentence of sentences.values()) {
+      clearTimeout(sentence.drainTimer);
       const source = sentence.source;
       // Cleared first so the "ended" this stop fires is not taken for the sentence finishing.
       sentence.source = null;

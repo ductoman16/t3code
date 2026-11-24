@@ -209,7 +209,9 @@ function setUp() {
   const transcriber = new StubTranscriber();
   const speaker = new StubSpeaker();
   const clock = new StubClock();
+  const ducking: boolean[] = [];
   const controller = new VoiceModeController({
+    audioDucking: { setDucked: (active) => ducking.push(active), releaseAfterUtteranceMs: 900 },
     createSpeechSource: microphone.create,
     transcriber,
     speaker,
@@ -227,7 +229,17 @@ function setUp() {
     await transcriber.answer(transcript);
   };
 
-  return { microphone, transcriber, speaker, clock, composer, leaveComposer, controller, say };
+  return {
+    microphone,
+    transcriber,
+    speaker,
+    clock,
+    composer,
+    leaveComposer,
+    controller,
+    say,
+    ducking,
+  };
 }
 
 async function setUpOn() {
@@ -360,6 +372,79 @@ describe("VoiceModeController", () => {
 
       expect(composer.draft).toBe("");
       expect(composer.sent).toEqual([]);
+    });
+  });
+
+  describe("audio ducking", () => {
+    it("releases a phrase that ends before the voice finishes preparing", async () => {
+      const { microphone, speaker, controller, ducking, clock } = setUp();
+      const ready = Promise.withResolvers<void>();
+      speaker.prepare = () => ready.promise;
+      const starting = controller.turnOn();
+      await settle();
+      microphone.handlers!.onSpeechStart();
+      microphone.handlers!.onSpeechConfirmed();
+      microphone.handlers!.onUtterance(AUDIO);
+      ready.resolve();
+      await starting;
+      clock.advance(900);
+      expect(ducking).toEqual([]);
+      expect(speaker.paused).toBe(false);
+    });
+
+    it("holds across a breath and cancels release at the first sound of resumed speech", async () => {
+      const { microphone, clock, ducking } = await setUpOn();
+      const mic = microphone.handlers!;
+      mic.onSpeechStart();
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      clock.advance(899);
+      expect(ducking).toEqual([true]);
+
+      mic.onSpeechStart();
+      clock.advance(200);
+      expect(ducking).toEqual([true]);
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      clock.advance(899);
+      expect(ducking).toEqual([true]);
+      clock.advance(1);
+      expect(ducking).toEqual([true, false]);
+    });
+
+    it("holds through a reply overlapping transcription and releases immediately on hang-up", async () => {
+      const { controller, microphone, composer, speaker, clock, ducking } = await setUpOn();
+      const mic = microphone.handlers!;
+      mic.onSpeechStart();
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      composer.reply("m1", "Here.");
+      clock.advance(900);
+      expect(ducking).toEqual([true]);
+      speaker.finishSpeaking();
+      clock.advance(3_000);
+      expect(ducking).toEqual([true]);
+      composer.reply("m1", "One more sentence.");
+      composer.endReply("m1");
+      expect(ducking).toEqual([true]);
+      speaker.finishSpeaking();
+      expect(ducking).toEqual([true, false]);
+
+      mic.onSpeechStart();
+      mic.onSpeechConfirmed();
+      mic.onUtterance(AUDIO);
+      composer.reply("m2", "Another.");
+      speaker.finishSpeaking();
+      expect(ducking).toEqual([true, false, true]);
+      controller.turnOff();
+      expect(ducking).toEqual([true, false, true, false]);
+      await controller.turnOn();
+      composer.reply("m3", "Hello.");
+      clock.advance(900);
+      expect(ducking).toEqual([true, false, true, false, true]);
+      speaker.finishSpeaking();
+      composer.endReply("m3");
+      expect(ducking).toEqual([true, false, true, false, true, false]);
     });
   });
 

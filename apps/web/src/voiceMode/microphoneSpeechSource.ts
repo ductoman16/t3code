@@ -13,12 +13,14 @@ const DETECTOR_ASSETS = `${import.meta.env.BASE_URL}${import.meta.env.VITE_VOICE
 // Silero v5 at 16 kHz. An utterance ends after `redemptionMs` of quiet, so that delay is part of
 // every reply's latency; shorter than this cuts people off at a breath. A quick one-word answer
 // ("two", "no") scores about 250 ms of speech, so `minSpeechMs` has to sit well below that.
+export const UTTERANCE_END_SILENCE_MS = 600;
+
 const DETECTOR_OPTIONS = {
   model: "v5",
   positiveSpeechThreshold: 0.5,
   negativeSpeechThreshold: 0.35,
   minSpeechMs: 160,
-  redemptionMs: 600,
+  redemptionMs: UTTERANCE_END_SILENCE_MS,
   preSpeechPadMs: 300,
 } as const;
 

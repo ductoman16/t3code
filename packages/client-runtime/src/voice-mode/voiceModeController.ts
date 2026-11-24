@@ -125,6 +125,11 @@ export interface VoiceModeDependencies<Audio = Float32Array> {
   readonly createSpeechSource: (handlers: SpeechSourceHandlers<Audio>) => SpeechSource;
   readonly transcriber: VoiceModeTranscriber<Audio>;
   readonly speaker: VoiceModeSpeaker;
+  readonly audioDucking?: {
+    readonly setDucked: (ducked: boolean) => void;
+    /** Additional quiet after the speech detector has closed an utterance. */
+    readonly releaseAfterUtteranceMs: number;
+  };
   /** Runs `run` once after `delayMs`; the returned function cancels it. */
   readonly schedule: (delayMs: number, run: () => void) => () => void;
   /** Read each time it is needed, so a changed setting applies to the next phrase. */
@@ -195,6 +200,9 @@ export class VoiceModeController<Audio = Float32Array> {
   private conversationThread: string | null = null;
   private stopWatchingReplies: (() => void) | null = null;
 
+  private ducked = false;
+  private duckForUser = false;
+  private cancelDuckingRelease: (() => void) | null = null;
   private soundStarted = false;
   private speechConfirmed = false;
   private replyAtSpeechStart = "";
@@ -369,6 +377,7 @@ export class VoiceModeController<Audio = Float32Array> {
           onMessageEnd: (messageId) => {
             this.repliesBeingSaid.delete(messageId);
             this.repliesCutOff.delete(messageId);
+            this.updateDucking(this.current.power);
           },
         },
         { includeReplyInProgress: this.awaitingReply },
@@ -379,6 +388,8 @@ export class VoiceModeController<Audio = Float32Array> {
     return {
       onSpeechStart: () => {
         if (run !== this.run) return;
+        this.cancelDuckingRelease?.();
+        this.cancelDuckingRelease = null;
         this.soundStarted = true;
         this.replyAtSpeechStart = this.dependencies.speaker.recentText();
         this.cancelSend();
@@ -386,12 +397,14 @@ export class VoiceModeController<Audio = Float32Array> {
       },
       onSpeechConfirmed: () => {
         if (run !== this.run) return;
+        this.duckForUser = true;
         this.speechConfirmed = true;
         this.dependencies.speaker.pause();
         this.refresh();
       },
       onSpeechCancel: () => {
         if (run !== this.run) return;
+        this.releaseUserDuckingAfterSilence();
         this.soundStarted = false;
         this.speechConfirmed = false;
         this.dependencies.speaker.resume();
@@ -399,9 +412,15 @@ export class VoiceModeController<Audio = Float32Array> {
         this.refresh();
       },
       onUtterance: (audio) => {
-        if (run !== this.run || this.current.power !== "on") return;
+        if (run !== this.run) return;
         this.soundStarted = false;
         this.speechConfirmed = false;
+        if (this.current.power !== "on") {
+          this.duckForUser = false;
+          this.dependencies.speaker.resume();
+          return;
+        }
+        this.releaseUserDuckingAfterSilence();
         this.utterances.push({ audio, replyAtStart: this.replyAtSpeechStart });
         void this.transcribeUtterances(run);
       },
@@ -515,6 +534,27 @@ export class VoiceModeController<Audio = Float32Array> {
     this.setState({ ...OFF, error: describe(error) });
   }
 
+  private releaseUserDuckingAfterSilence(): void {
+    const ducking = this.dependencies.audioDucking;
+    if (!ducking || !this.duckForUser || this.cancelDuckingRelease) return;
+    this.cancelDuckingRelease = this.dependencies.schedule(ducking.releaseAfterUtteranceMs, () => {
+      this.cancelDuckingRelease = null;
+      this.duckForUser = false;
+      this.updateDucking(this.current.power);
+    });
+  }
+
+  private updateDucking(power: VoiceModeState["power"]): void {
+    const ducking = this.dependencies.audioDucking;
+    if (!ducking) return;
+    const next =
+      power === "on" &&
+      (this.duckForUser || this.repliesBeingSaid.size > 0 || this.dependencies.speaker.isActive());
+    if (this.ducked === next) return;
+    this.ducked = next;
+    ducking.setDucked(next);
+  }
+
   private halt(): void {
     this.run += 1;
     this.abort?.abort();
@@ -526,6 +566,9 @@ export class VoiceModeController<Audio = Float32Array> {
     this.conversationThread = null;
     this.stopListeningToSpeaker?.();
     this.stopListeningToSpeaker = null;
+    this.cancelDuckingRelease?.();
+    this.cancelDuckingRelease = null;
+    this.duckForUser = false;
     this.soundStarted = false;
     this.speechConfirmed = false;
     this.utterances = [];
@@ -557,6 +600,7 @@ export class VoiceModeController<Audio = Float32Array> {
   }
 
   private setState(next: VoiceModeState): void {
+    this.updateDucking(next.power);
     const previous = this.current;
     if (
       previous.power === next.power &&
