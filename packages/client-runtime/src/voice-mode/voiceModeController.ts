@@ -377,6 +377,7 @@ export class VoiceModeController<Audio = Float32Array> {
           onMessageEnd: (messageId) => {
             this.repliesBeingSaid.delete(messageId);
             this.repliesCutOff.delete(messageId);
+            this.updateDucking(this.current.power);
           },
         },
         { includeReplyInProgress: this.awaitingReply },
@@ -546,7 +547,9 @@ export class VoiceModeController<Audio = Float32Array> {
   private updateDucking(power: VoiceModeState["power"]): void {
     const ducking = this.dependencies.audioDucking;
     if (!ducking) return;
-    const next = power === "on" && (this.duckForUser || this.dependencies.speaker.isActive());
+    const next =
+      power === "on" &&
+      (this.duckForUser || this.repliesBeingSaid.size > 0 || this.dependencies.speaker.isActive());
     if (this.ducked === next) return;
     this.ducked = next;
     ducking.setDucked(next);

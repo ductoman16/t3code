@@ -422,6 +422,12 @@ describe("VoiceModeController", () => {
       clock.advance(900);
       expect(ducking).toEqual([true]);
       speaker.finishSpeaking();
+      clock.advance(3_000);
+      expect(ducking).toEqual([true]);
+      composer.reply("m1", "One more sentence.");
+      composer.endReply("m1");
+      expect(ducking).toEqual([true]);
+      speaker.finishSpeaking();
       expect(ducking).toEqual([true, false]);
 
       mic.onSpeechStart();
@@ -436,6 +442,9 @@ describe("VoiceModeController", () => {
       composer.reply("m3", "Hello.");
       clock.advance(900);
       expect(ducking).toEqual([true, false, true, false, true]);
+      speaker.finishSpeaking();
+      composer.endReply("m3");
+      expect(ducking).toEqual([true, false, true, false, true, false]);
     });
   });
 
