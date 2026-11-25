@@ -7,7 +7,7 @@ import { isDesktopRuntimeExternalDependency } from "../../scripts/lib/desktop-ex
 import { loadRepoEnv } from "../../scripts/lib/public-config.ts";
 
 const repoEnv = loadRepoEnv();
-const domTests = ["src/preview/PickPreload.test.ts"];
+const domTests = ["src/preview/PickPreload.test.ts", "firefox-audio-ducking/content.test.js"];
 
 // Install only bundle externals; the server bundle already carries its dependency tree.
 const isMainProcessExternal = (id: string) =>

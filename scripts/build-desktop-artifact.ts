@@ -1004,6 +1004,8 @@ export const DESKTOP_FILE_EXCLUSIONS = [
   "!apps/desktop/prod-resources/wsl-runtime.tar.gz.sha256",
   "!apps/desktop/gnome-extension",
   "!apps/desktop/gnome-extension/**/*",
+  "!apps/desktop/firefox-audio-ducking",
+  "!apps/desktop/firefox-audio-ducking/**/*",
 ] as const;
 // Windows terminal helpers cannot run on macOS and slow signing and notarization.
 export const MAC_FILE_EXCLUSIONS = [

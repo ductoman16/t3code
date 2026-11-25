@@ -1,3 +1,4 @@
+import { VOICE_MODE_DEFAULT_SPEED } from "@t3tools/client-runtime/voice-mode";
 import * as Schema from "effect/Schema";
 
 import {
@@ -18,10 +19,11 @@ const VoiceModeSettings = Schema.Struct({
 });
 type VoiceModeSettings = typeof VoiceModeSettings.Type;
 
-const DEFAULTS: VoiceModeSettings = { voice: "af_heart", speed: 1.1, sendAfterSilenceMs: 900 };
-
-/** The reading speeds offered in Settings. */
-export const VOICE_MODE_SPEEDS = [0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.5, 1.75, 2] as const;
+const DEFAULTS: VoiceModeSettings = {
+  voice: "af_heart",
+  speed: VOICE_MODE_DEFAULT_SPEED,
+  sendAfterSilenceMs: 900,
+};
 
 export function readVoiceModeSettings(): VoiceModeSettings {
   return readLocalStorageValue(KEY, DEFAULTS, VoiceModeSettings);

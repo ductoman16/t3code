@@ -4,6 +4,7 @@ import * as Effect from "effect/Effect";
 import { receiveProviderAuthCallback, cancelProviderAuthCallback } from "./methods/providerAuth.ts";
 import * as DesktopIpc from "./DesktopIpc.ts";
 import { installNotificationBadge } from "./methods/notificationBadge.ts";
+import { installVoiceAudioDucking } from "./methods/voiceAudioDucking.ts";
 import { getClientSettings, setClientSettings } from "./methods/clientSettings.ts";
 import { getConnectionCatalog, setConnectionCatalog } from "./methods/connectionCatalog.ts";
 import {
@@ -91,6 +92,7 @@ import {
 export const installDesktopIpcHandlers = Effect.fn("desktop.ipc.installHandlers")(function* () {
   const ipc = yield* DesktopIpc.DesktopIpc;
   yield* installNotificationBadge();
+  yield* installVoiceAudioDucking();
   yield* PreviewIpc.installPreviewEventForwarding();
 
   yield* ipc.handle(AppActivationIpc.setReady);

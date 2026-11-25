@@ -1100,6 +1100,8 @@ export interface DesktopBridge {
   restartAudioService?: () => Promise<boolean>;
   setNotificationBadge: (badge: { count: number; image: string | null }) => Promise<void>;
   onNotificationBadgeClear: (listener: () => void) => () => void;
+  /** Turns other apps' audio down (the Firefox extension in `apps/desktop/firefox-audio-ducking`). */
+  setVoiceAudioDucking: (ducked: boolean) => Promise<void>;
   onTrackpadScrollBegin: (listener: () => void) => () => void;
   onTrackpadScrollEnd: (listener: () => void) => () => void;
   /**

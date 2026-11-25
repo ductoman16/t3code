@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest";
 import * as Effect from "effect/Effect";
+import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { vi } from "vite-plus/test";
 
@@ -7,9 +8,18 @@ const openDatabaseAsync = vi.hoisted(() => vi.fn());
 
 vi.mock("expo-sqlite", () => ({ openDatabaseAsync }));
 
+vi.mock("expo-secure-store", () => ({}));
+
+import { androidVoice } from "../features/voice-mode/androidSpeaker";
+import {
+  MobilePreferencesStore,
+  layer as preferencesLayer,
+  voiceModeReadingSpeed,
+} from "./mobile-preferences";
+import { MobileSecureStorage } from "./mobile-secure-storage";
 import * as MobileDatabase from "./mobile-database";
 
-describe("offline pull request cache", () => {
+describe("mobile database", () => {
   const environmentId = "cached-environment" as import("@t3tools/contracts").EnvironmentId;
   const otherEnvironment = "other-environment" as import("@t3tools/contracts").EnvironmentId;
 
@@ -55,5 +65,52 @@ describe("offline pull request cache", () => {
         "Some",
       );
     }),
+  );
+
+  it.effect(
+    "uses the saved voice speed for speech and defaults for invalid or missing values",
+    () =>
+      Effect.gen(function* () {
+        yield* Effect.promise(sqliteDatabase);
+        const database = yield* MobileDatabase.make;
+        const preferences = yield* MobilePreferencesStore.pipe(
+          Effect.provide(
+            preferencesLayer.pipe(
+              Layer.provide(Layer.succeed(MobileDatabase.MobileDatabase, database)),
+              Layer.provide(
+                Layer.succeed(MobileSecureStorage, {
+                  getItem: () => Effect.succeed(null),
+                  setItem: () => Effect.void,
+                  removeItem: () => Effect.void,
+                }),
+              ),
+            ),
+          ),
+        );
+        let loaded = yield* preferences.load;
+        const rates: number[] = [];
+        const voice = androidVoice(
+          {
+            prepareVoice: async () => {},
+            say: (_id, _text, rate) => rates.push(rate),
+            stopSpeaking: () => {},
+            shutDownVoice: () => {},
+          },
+          () => voiceModeReadingSpeed(loaded),
+        );
+
+        voice.say("missing", "Default speed.");
+        yield* preferences.savePatch({ voiceModeSpeed: 1.4 });
+        loaded = yield* preferences.load;
+        expect(loaded.voiceModeSpeed).toBe(1.4);
+        voice.say("saved", "Selected speed.");
+
+        yield* database.savePreferencesJson('{"voiceModeSpeed":1.6}', 1);
+        loaded = yield* preferences.load;
+        expect(loaded.voiceModeSpeed).toBeUndefined();
+        voice.say("invalid", "Default speed again.");
+
+        expect(rates).toEqual([1.1, 1.4, 1.1]);
+      }),
   );
 });

@@ -7,6 +7,7 @@ import {
   watchVoiceModeChimes,
 } from "@t3tools/client-runtime/voice-mode";
 import type { EnvironmentId, ThreadId } from "@t3tools/contracts";
+import { AsyncResult } from "effect/reactivity";
 import { msg } from "gt-react-native";
 import { useEffect, useEffectEvent, useSyncExternalStore } from "react";
 import { getRecordingPermissionsAsync } from "expo-audio";
@@ -17,8 +18,10 @@ import * as Dialog from "../../components/ui/Dialog";
 import { m } from "../../i18n/messages";
 import { scopedThreadKey } from "../../lib/scopedEntities";
 import { getLocalVoiceTranscriber } from "../../native/voiceTranscription";
+import { voiceModeReadingSpeed } from "../../persistence/mobile-preferences";
 import { appAtomRegistry } from "../../state/atom-registry";
 import { getComposerDraftSnapshot, setComposerDraftText } from "../../state/use-composer-drafts";
+import { mobilePreferencesAtom } from "../../state/preferences";
 import { environmentThreadDetails } from "../../state/threads";
 import { createVoiceRecordingPermission } from "../voice-input/voiceRecordingPermission";
 import { voiceRouteAtom } from "../voice-input/voiceDestination";
@@ -29,13 +32,17 @@ import { nativeVoiceMode } from "./nativeVoiceMode";
 import { createRouteTranscriber } from "./routeTranscriber";
 import { createVoiceModeCall } from "./voiceModeCall";
 
-const READING_SPEED = 1.1;
 const SEND_AFTER_SILENCE_MS = 900;
 
 function createVoiceMode() {
   const native = nativeVoiceMode;
   if (!native) return null;
-  const readRate = () => READING_SPEED;
+  const readRate = () => {
+    const preferences = appAtomRegistry.get(mobilePreferencesAtom);
+    return voiceModeReadingSpeed(
+      AsyncResult.isSuccess(preferences) ? preferences.value : undefined,
+    );
+  };
   // Replies are read where speech is transcribed: on the phone, or with Kokoro on the environment.
   const speaker = createAndroidSpeaker(native, () => {
     const route = appAtomRegistry.get(voiceRouteAtom);
@@ -54,6 +61,7 @@ function createVoiceMode() {
   let askingForMicrophone = false;
   // Keeps the stored transcription choice loaded, so the first phrase uses it.
   appAtomRegistry.mount(voiceRouteAtom);
+  appAtomRegistry.mount(mobilePreferencesAtom);
   const controller = new VoiceModeController<string>({
     createSpeechSource: createAndroidSpeechSource(native, async () => {
       const current = await getRecordingPermissionsAsync();
