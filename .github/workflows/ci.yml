@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - voice-mode
 
 permissions:
   contents: read
