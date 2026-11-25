@@ -5,6 +5,8 @@ on:
   push:
     branches:
       - main
+      # The fork sync pushes directly to this branch.
+      - voice-mode
 
 permissions:
   contents: read
